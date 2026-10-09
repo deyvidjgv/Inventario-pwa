@@ -1,336 +1,227 @@
-# Inventario Pool — Plan de proyecto
+# Inventario Pool — La lógica del negocio
 
-App **Android nativa (Java)** para llevar el **inventario y el control de dinero** de un negocio tipo bar con mesas de pool en Colombia. La usa **una sola persona en el celular** (caja o cobrador). Funciona **sin internet** y no debe perder datos.
+Este documento explica **qué hace la app y por qué funciona así**, antes de escribir una sola línea de código. Léelo completo. Si algo no te cuadra, pregunta antes de programar: es mejor corregir una idea aquí que corregir código después.
 
-> El repositorio se llama `Inventario-pwa` por una idea inicial. El proyecto final es una **app Android (APK)**, no una PWA.
-
-Este documento es la fuente de verdad para dividir el trabajo entre dos personas. Si algo del código contradice este documento, se corrige uno de los dos y se avisa al equipo.
+El plan técnico (datos, interfaces, fases y reparto de trabajo) está en [`docs/PLAN_TECNICO.md`](docs/PLAN_TECNICO.md).
 
 ---
 
-## 1. Qué hace la app
+## 1. El negocio en un minuto
 
-Solo dos cosas: **inventario** y **dinero**.
+Es un bar con mesas de pool en Colombia. Se vende cerveza (de varias marcas), chitos, cigarros, agua y otras cosas, y también se cobra el juego de pool.
 
-| Panel | Para qué sirve |
+La app la usa **una sola persona en la caja, desde el celular**, **sin internet**. Durante la noche las ventas se van anotando (en el cuaderno o tocando botones) y en la app se registran para llevar el control.
+
+El dueño quiere responder dos preguntas, y nada más:
+
+1. **¿Cuánto tengo de cada cosa?** (inventario)
+2. **¿Cuánto estoy ganando?** (dinero)
+
+Todo lo demás (fiado, deudas, sueldos) lo sigue llevando en el cuaderno.
+
+---
+
+## 2. Las cinco ideas que sostienen todo
+
+1. **El inventario es continuo.** No se reinicia por fecha ni por día. Lo que hay hoy es lo que había ayer, más lo que entró, menos lo que se vendió. Solo cambia cuando alguien registra algo o corrige algo.
+2. **La mercancía entra en lotes.** Cada vez que se compra, se registra cuántas unidades llegaron y **a cuánto se compró cada una**. Esa compra es un *lote*.
+3. **El precio de venta lo decide el dueño** y lo escribe en cada producto. Nada se calcula solo.
+4. **Se vende primero lo más viejo.** Cada venta gasta los lotes en orden: del más antiguo al más nuevo. Así la ganancia sale del costo real de cada botella y no de un promedio.
+5. **La noche es solo una etiqueta.** Una *jornada* se abre y se cierra a mano. Sirve para agrupar las ventas de una noche y calcular cuánto se ganó. No reinicia nada.
+
+---
+
+## 3. Glosario
+
+| Palabra | Qué significa |
 |---|---|
-| **Inventario** | Crear productos, registrar entradas de mercancía con su **precio de compra** y ver el stock. |
-| **Vender** | Botones rápidos por categoría. Cada toque suma 1 y descuenta del inventario. |
-| **Márgenes** | Por producto: precio de compra de cada lote, ganancia por unidad, margen en %, y la comparación entre lo que se ganó con el precio viejo y lo que se habría ganado con el precio nuevo. |
-| **Dinero** | Ventas, costo y ganancia por jornada. Lista libre de gastos. |
-| **Jornada** | Botón para abrir y cerrar la noche. Al cerrar se puede contar el stock real. |
-| **Respaldo** | Exportar e importar una copia en archivo. Después, sincronización con Firebase. |
-
-### Fuera del alcance (no hacer)
-
-- Fiado, deudas y "me deben".
-- Empleados, descuentos por faltante y cobros a personas.
-- Reglas especiales para el pool o combos.
-- Multi-usuario.
-
-**Pool sin lógica especial.** Todo es un producto con su propio precio, creado por el dueño:
-- "Cerveza Águila" a 7.000 y "Cerveza Águila Pool" a 8.000 son **dos productos separados**, cada uno con su stock y sus lotes.
-- "Juego Pool" a 2.000 es un producto **sin inventario** (`tracksStock = false`).
+| **Producto** | Algo que se vende. Tiene nombre, categoría y precio de venta. |
+| **Categoría** | Para agrupar productos (Cervezas, Snacks, Cigarros, Juegos…). |
+| **Lote** | Una compra de un producto: cantidad, precio de compra por unidad y fecha. |
+| **Stock** | Cuántas unidades quedan de un producto, sumando lo que le queda a cada lote. |
+| **Venta** | Una o varias unidades de un producto, al precio que tenía en ese momento. |
+| **Jornada** | Una noche de trabajo, abierta y cerrada a mano por el dueño. |
+| **Margen** | Qué parte del precio es ganancia. Se muestra de dos formas (ver sección 4). |
+| **Conteo** | Contar físicamente cuánto queda y compararlo con lo que dice la app. |
+| **Ajuste** | La corrección que se guarda cuando el conteo no coincide con la app. |
+| **Gasto** | Plata que sale del negocio y no es mercancía (hielo, luz, arriendo…). |
 
 ---
 
-## 2. Reglas de negocio
+## 4. Un ejemplo completo: la cerveza Águila
 
-Todas las reglas viven en el módulo `:domain` y tienen pruebas.
+Esta es la historia que explica casi toda la lógica. El precio de venta de la Águila es **6.000**.
 
-### 2.1 Dinero y tiempo
-- Los montos son **pesos colombianos enteros** (`long`). Nunca `double` ni `float`.
-- Las fechas se guardan en UTC (`Instant`, epoch millis) y se muestran en **`America/Bogota`**.
-- Los porcentajes se calculan con `double` solo para mostrarlos, con 1 decimal. Nunca se guardan.
+**Paso 1: primera compra.** Se compran 24 Águila a **5.000** cada una.
 
-### 2.2 Productos
-- Tienen nombre, categoría, **precio de venta**, `tracksStock` y `active`.
-- **Nunca se borran.** Se archivan (`active = false`) para no romper el historial.
-- Cambiar el precio de venta **no cambia** las ventas ya hechas, porque cada venta guarda su `unitPrice`.
-
-### 2.3 Entradas de mercancía (lotes)
-- Cada entrada crea un **lote**: producto, cantidad, **precio de compra unitario**, fecha y nota.
-- Siempre se pide el precio de compra. No se puede registrar una entrada sin él.
-- El stock de un producto es la suma de `quantityRemaining` de sus lotes.
-
-### 2.4 Ventas
-- Solo se puede vender con una **jornada abierta**.
-- Una venta guarda: producto, cantidad, `unitPrice` (precio de ese momento) y fecha.
-- Los productos con stock **consumen lotes en orden FIFO**: primero el lote más viejo (`receivedAt`, y si empatan, el `id` menor).
-- Por cada lote tocado se guarda una `SaleLotAllocation` (`saleId`, `lotId`, `quantity`, `unitCost`). De ahí sale el costo real de la venta.
-- **No se puede vender más de lo que hay en stock.** La app rechaza la venta y pide registrar primero la entrada.
-- Los productos sin stock (`tracksStock = false`) no tocan lotes. Su costo es 0 y su ganancia es el precio completo.
-
-### 2.5 Anular o corregir una venta
-- **Anular** devuelve la cantidad a los lotes originales usando las `SaleLotAllocation` y marca la venta como `voided`. No se borra.
-- **Corregir** una venta es anular y crear una nueva.
-- Toda anulación o edición queda en el `AuditLog`.
-
-### 2.6 Ganancia y márgenes
-Por unidad vendida: `ganancia = unitPrice − unitCost` (con el costo del lote del que salió).
-
-Por lote, con `precio = precio de venta actual del producto` y `costo = precio de compra del lote`:
-
-| Métrica | Fórmula |
-|---|---|
-| Ganancia por unidad | `precio − costo` |
-| Margen sobre venta | `(precio − costo) / precio` |
-| Margen sobre costo | `(precio − costo) / costo` (si el costo es 0, no se muestra) |
-
-**Comparación viejo contra nuevo**, por producto:
-- `gananciaReal` = suma de `(unitPrice − unitCost) × cantidad` de todas las asignaciones de ventas no anuladas.
-- `gananciaConCostoNuevo` = suma de `(unitPrice − costoDelLoteMásReciente) × cantidad` de esas mismas ventas.
-- `diferencia` = `gananciaConCostoNuevo − gananciaReal`.
-- Lote más reciente = mayor `receivedAt`; si empatan, mayor `id`.
-
-### 2.7 Jornada
-- Abrir y cerrar son botones manuales. No hay corte automático a medianoche. Una jornada puede cruzar la medianoche.
-- Solo puede haber **una jornada abierta** a la vez.
-- Se puede **reabrir la última jornada cerrada**.
-- Resumen de jornada (sobre ventas no anuladas):
-  - `ventas` = suma de `unitPrice × cantidad`.
-  - `costo` = suma de `unitCost × cantidad` de las asignaciones.
-  - `ganancia` = `ventas − costo`.
-  - Los **gastos se muestran aparte** y no modifican la ganancia. Se puede mostrar `ganancia − gastos` como dato informativo.
-
-### 2.8 Conteo al cerrar (opcional)
-- Al cerrar, el usuario puede escribir el stock real de cada producto.
-- `diferencia = contado − esperado` (el esperado es la suma de lotes).
-- **Si falta:** se descuenta de los lotes en FIFO. La pérdida se muestra al costo y al precio de venta.
-- **Si sobra:** se crea un lote nuevo con el precio de compra del lote más reciente.
-- Se guarda como `StockAdjustment`. **No se le cobra a nadie.**
-
-### 2.9 Gastos
-- Concepto libre, monto y fecha. Se puede ligar a una jornada.
-- Hay total por jornada y por rango de fechas.
-
----
-
-## 3. Modelo de datos
-
-| Entidad | Campos principales |
-|---|---|
-| `Category` | `id`, `name` |
-| `Product` | `id`, `name`, `categoryId`, `salePrice` (long), `tracksStock`, `active` |
-| `StockLot` | `id`, `productId`, `receivedAt`, `quantityIn`, `quantityRemaining`, `unitCost` (long), `note` |
-| `Jornada` | `id`, `openedAt`, `closedAt` (nulo si está abierta) |
-| `Sale` | `id`, `jornadaId`, `productId`, `quantity`, `unitPrice` (long), `createdAt`, `voided` |
-| `SaleLotAllocation` | `saleId`, `lotId`, `quantity`, `unitCost` (long) |
-| `StockAdjustment` | `id`, `productId`, `jornadaId`, `expected`, `counted`, `difference`, `createdAt` |
-| `Expense` | `id`, `concept`, `amount` (long), `createdAt`, `jornadaId` (opcional) |
-| `AuditLog` | `id`, `entity`, `entityId`, `action`, `beforeJson`, `afterJson`, `createdAt` |
-
-Todas las operaciones que tocan varias tablas (vender, anular, cerrar con conteo) van **dentro de una transacción**. Si algo falla, no queda nada a medias.
-
----
-
-## 4. Arquitectura
-
-```
-Inventario-pwa/
-├── domain/        módulo Java puro (sin Android). Reglas, modelos, interfaces y pruebas JUnit.
-├── app/           módulo Android. Room, repositorios, pantallas, ViewModels.
-├── .github/workflows/android.yml   compila el APK
-└── README.md
-```
-
-- **Lenguaje:** Java 17.
-- **Android:** `minSdk 26`, `targetSdk` el vigente, AndroidX, Material Components y layouts XML.
-- **Base de datos:** Room (SQLite).
-- **UI:** `ViewModel` + `LiveData`. Una sola Activity con navegación por fragments.
-- **Pruebas:** JUnit 5 en `:domain`. La lógica de dinero nunca se escribe dentro de una pantalla.
-- **Paquete base sugerido:** `com.deyvidjgv.inventario`.
-
-### Contrato entre las dos mitades
-
-`:domain` define estas interfaces. La persona de datos las implementa con Room y la persona de la app las usa. La app puede avanzar con implementaciones falsas (mocks) mientras no existan las reales.
-
-```java
-public interface InventoryService {
-    Product createProduct(String name, long categoryId, long salePrice, boolean tracksStock);
-    void updateProduct(Product product);
-    void archiveProduct(long productId);
-    StockLot receiveStock(long productId, int quantity, long unitCost, Instant at, String note);
-    List<ProductStock> listStock();
-}
-
-public interface SalesService {
-    Jornada openJornada(Instant at);
-    JornadaSummary closeJornada(long jornadaId, Instant at, Map<Long, Integer> countedByProduct); // el mapa puede ir vacío
-    Jornada reopenLastJornada();
-    Sale sell(long productId, int quantity);   // exige jornada abierta; usa el precio de venta actual
-    void voidSale(long saleId);
-}
-
-public interface ReportService {
-    ProductMarginReport margins(long productId);
-    List<ProductMarginReport> allMargins();
-    JornadaSummary summary(long jornadaId);
-    PeriodSummary summary(LocalDate from, LocalDate to);   // zona America/Bogota
-}
-
-public interface ExpenseService {
-    Expense add(String concept, long amount, Instant at, Long jornadaId);
-    void delete(long expenseId);
-    List<Expense> list(LocalDate from, LocalDate to);
-}
-
-public interface BackupService {
-    String exportJson();
-    void importJson(String json);   // reemplaza todo; validar antes de borrar
-}
-```
-
-Los errores de negocio (stock insuficiente, no hay jornada abierta, precio de compra faltante) se lanzan como excepciones propias del dominio (`DomainException` con un código), para que la pantalla muestre un mensaje claro.
-
----
-
-## 5. Pantallas
-
-1. **Inicio:** estado de la jornada (abrir, cerrar o reabrir) y el resumen del momento.
-2. **Vender:** categorías arriba y una cuadrícula de botones grandes. Un toque suma 1, hay mantener-pulsado para escribir la cantidad, y se ve el total de la jornada. Se puede anular una venta desde el historial.
-3. **Inventario:** lista de productos con stock. Crear, editar y archivar. Botón de **entrada de mercancía** con cantidad y precio de compra.
-4. **Márgenes:** lista de productos y, al entrar, los lotes con ganancia por unidad, margen sobre venta y sobre costo, y la comparación viejo contra nuevo.
-5. **Dinero:** resumen por jornada y por rango, y lista de gastos.
-6. **Cierre:** conteo opcional por producto, diferencias y resumen final.
-7. **Respaldo:** exportar e importar el archivo.
-
-Pensar en celular: botones grandes, una mano y letra legible con poca luz. Los montos se muestran con puntos de miles, por ejemplo `600.000`, usando `es-CO` y sin decimales.
-
----
-
-## 6. Casos de prueba obligatorios
-
-Estos casos salen del negocio real. Deben existir como pruebas automáticas en `:domain`.
-
-**A. Dos lotes y venta que cruza ambos** (Águila, venta a 6.000)
-- Lote 1: 24 unidades a 5.000. Lote 2: 24 unidades a 4.300.
-- Vender 30: 24 salen del lote 1 y 6 del lote 2.
-- Ganancia real = 24×1.000 + 6×1.700 = **34.200**.
-- Con el costo nuevo habría sido 30×1.700 = 51.000, así que la diferencia es **16.800**.
-- Margen sobre venta: lote 1 = 16,7 %, lote 2 = 28,3 %. Margen sobre costo: lote 1 = 20,0 %, lote 2 = 39,5 %.
-
-**B. Productos del pool, separados**
-- "Cerveza Águila Pool" a 8.000 con lote a 4.300 → ganancia por unidad **3.700**.
-- "Juego Pool" a 2.000 sin stock → ganancia por unidad **2.000**, y no toca lotes.
-
-**C. Anular una venta**
-- Después del caso A, anular la venta: el lote 1 vuelve a 24 y el lote 2 a 24. La venta queda marcada y en el `AuditLog`.
-
-**D. Stock insuficiente**
-- Con 48 unidades en total, vender 49 se rechaza y no cambia nada.
-
-**E. Conteo que da faltante**
-- Después de vender 30 (caso A) quedan 18 en el lote 2. Se cuentan 16.
-- Diferencia **−2**, descontada del lote 2: pérdida al costo **8.600**, al precio de venta **12.000**.
-
-**F. Precio cambiado después**
-- Vender a 6.000, subir el producto a 6.500 y vender de nuevo. Las ventas viejas siguen a 6.000.
-
-**G. Una sola jornada abierta**
-- Abrir una segunda jornada con una abierta debe fallar. Vender sin jornada abierta debe fallar.
-
-**H. Respaldo**
-- Exportar, borrar todo e importar deja los mismos productos, lotes, ventas y gastos, con los mismos totales.
-
----
-
-## 7. Reparto del trabajo
-
-### Persona A — Dominio y datos
-1. Modelos y las interfaces de la sección 4 en `:domain`.
-2. Lógica FIFO, ventas, anulaciones, márgenes, jornada y conteo, con los casos de la sección 6.
-3. Room: entidades, DAOs, migraciones, transacciones, y las implementaciones de las interfaces.
-4. `BackupService` (exportar e importar JSON).
-
-### Persona B — App y entrega
-1. Proyecto Android, navegación y tema.
-2. Todas las pantallas de la sección 5, usando las interfaces (con mocks al inicio).
-3. GitHub Actions que compila y publica el APK (sección 8).
-4. Respaldo en pantalla (compartir el archivo por WhatsApp o Drive) y, al final, Firebase.
-
-### Punto de encuentro
-Se hace **primero y juntos**: acordar las interfaces y los modelos de la sección 4 y subirlos a `main`. Con eso ninguno espera al otro.
-
----
-
-## 8. Entrega del APK
-
-El APK lo compila **GitHub Actions** en cada push a `main` y el resultado se descarga desde la pestaña *Actions* o *Releases*. Esqueleto del flujo:
-
-```yaml
-name: android
-on:
-  push:
-    branches: [main]
-jobs:
-  build:
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-java@v4
-        with: { distribution: temurin, java-version: 17 }
-      - run: ./gradlew :domain:test :app:assembleRelease
-      - uses: actions/upload-artifact@v4
-        with: { name: app-release, path: app/build/outputs/apk/release/*.apk }
-```
-
-**Firma (muy importante).**
-- Las actualizaciones deben firmarse **siempre con la misma llave**. Si la llave cambia, Android obliga a desinstalar la app y **se pierden los datos**.
-- Generar la llave una sola vez y guardar copia fuera del repositorio.
-- **Nunca** subir el archivo de la llave al repositorio. Se guarda en *Secrets* de GitHub: `KEYSTORE_BASE64`, `KEYSTORE_PASSWORD`, `KEY_ALIAS`, `KEY_PASSWORD`.
-- Para instalar en el celular hay que permitir "instalar apps de orígenes desconocidos".
-
----
-
-## 9. Que los datos no se pierdan
-
-1. **Local:** Room con transacciones. Es la fuente de verdad.
-2. **Archivo:** exportar a JSON y compartirlo. Recomendar al dueño hacerlo al cerrar la semana.
-3. **Firebase (fase final):** sincronización de lo local hacia la nube.
-   - Firestore con persistencia sin conexión.
-   - Autenticación anónima o con Google.
-   - El dueño crea el proyecto y entrega `google-services.json`. **No subir claves privadas al repositorio.**
-   - La estrategia de conflictos se define al empezar esa fase.
-4. Al desinstalar la app se borran los datos locales. Sin copia en archivo o en Firebase, no hay forma de recuperarlos.
-
----
-
-## 10. Fases y criterios de listo
-
-| Fase | Contenido | Está listo cuando |
+| Lote | Unidades | Compra |
 |---|---|---|
-| 0 | Interfaces y modelos acordados en `main` | Los dos compilan contra las mismas interfaces |
-| 1 | Dominio con FIFO, ventas, márgenes, jornada y conteo | Pasan todos los casos de la sección 6 (menos H) |
-| 2 | Room y repositorios | Los mismos casos pasan contra la base real |
-| 3 | Pantallas (en paralelo con 1 y 2) | Se puede abrir jornada, vender, anular y cerrar en el celular |
-| 4 | APK por GitHub Actions | Un push a `main` deja un APK instalable |
-| 5 | Respaldo en archivo | Pasa el caso H |
-| 6 | Firebase | Se restaura en otro celular desde la nube |
+| 1 | 24 | 5.000 |
+
+**Paso 2: el proveedor baja el precio.** Se compran otras 24, ahora a **4.300**.
+
+| Lote | Unidades | Compra |
+|---|---|---|
+| 1 | 24 | 5.000 |
+| 2 | 24 | 4.300 |
+
+Ahora hay 48 en stock, pero **no todas costaron lo mismo**.
+
+**Paso 3: se venden 30.** La app gasta primero el lote 1 y luego el 2:
+
+| De dónde salen | Unidades | Ganancia por unidad | Ganancia |
+|---|---|---|---|
+| Lote 1 (a 5.000) | 24 | 6.000 − 5.000 = 1.000 | 24.000 |
+| Lote 2 (a 4.300) | 6 | 6.000 − 4.300 = 1.700 | 10.200 |
+| **Total** | **30** | | **34.200** |
+
+**Paso 4: qué se aprende.** Si todas las 30 se hubieran comprado al precio nuevo, la ganancia habría sido 30 × 1.700 = **51.000**. La diferencia es **16.800**: es lo que el dueño "dejó de ganar" por haber comprado antes más caro. Esa comparación es justo lo que quiere ver en la pantalla de márgenes.
+
+**Los márgenes de cada lote** (con el precio de venta actual, 6.000):
+
+| Lote | Ganancia por unidad | Margen sobre venta | Margen sobre costo |
+|---|---|---|---|
+| 1 (a 5.000) | 1.000 | 16,7 % | 20,0 % |
+| 2 (a 4.300) | 1.700 | 28,3 % | 39,5 % |
+
+- **Margen sobre venta** = ganancia ÷ precio de venta. "De cada 6.000 que entran, el 28,3 % es ganancia."
+- **Margen sobre costo** = ganancia ÷ precio de compra. "Sobre lo que pagué, gano 39,5 %."
+
+El dueño quiere ver **los dos**.
 
 ---
 
-## 11. Convenciones de trabajo
+## 5. El pool: sin lógica especial
 
-- Ramas: `a/<tema>` y `b/<tema>`. Todo entra a `main` con Pull Request revisado por la otra persona.
-- Commits en español, cortos y claros.
-- Ningún cálculo de dinero fuera de `:domain`.
-- Todo cambio de reglas se refleja primero en este README.
-- Nunca subir llaves, contraseñas ni `google-services.json` con claves privadas.
+En el pool la cerveza sale a 8.000 (7.000 de la cerveza y 1.000 del juego) y jugar solo cuesta 2.000. Para no tener reglas sueltas ni combos, **no hay nada especial**. Cada cosa es simplemente un producto con su propio precio, que escribe el dueño:
+
+| Producto | Precio | ¿Lleva inventario? | Ganancia (con costo de 4.300) |
+|---|---|---|---|
+| Cerveza Águila | 7.000 | Sí | 2.700 |
+| Cerveza Águila Pool | 8.000 | Sí | 3.700 |
+| Juego Pool | 2.000 | **No** | 2.000 |
+
+Consecuencias que hay que tener claras:
+
+- "Cerveza Águila" y "Cerveza Águila Pool" son **dos productos distintos, con su propio stock y sus propios lotes**. Cuando llegue mercancía, el dueño decide en cuál de los dos la registra.
+- Un producto **sin inventario** (como el juego) se puede vender siempre, no gasta lotes y su costo es 0. Toda su venta es ganancia.
+- Si mañana quiere otro juego (billar, rana…), solo crea un producto nuevo sin inventario y le pone nombre y precio.
 
 ---
 
-## 12. Decisiones ya tomadas
+## 6. Una noche, paso a paso
 
-- Pool sin lógica especial: productos separados, cada uno con su precio.
-- Sin empleados ni cobros por faltantes. El conteo solo ajusta el stock.
-- Sin fiado ni deudas.
-- Jornada manual, no por reloj.
-- Venta rechazada si no hay stock suficiente.
-- Los ajustes por sobrante entran con el costo del lote más reciente.
+```mermaid
+flowchart LR
+    A[Compra de mercancía] --> B[Registrar entrada:<br/>cantidad y precio de compra]
+    B --> C[(Lotes en inventario)]
+    D[Abrir jornada] --> E[Anotar ventas<br/>con botones rápidos]
+    E -->|gasta del lote más viejo al más nuevo| C
+    E --> F{¿Hubo un error?}
+    F -->|sí| G[Anular la venta:<br/>las unidades vuelven a su lote]
+    G --> E
+    F -->|no| H[Cerrar jornada]
+    H --> I[Conteo opcional del stock real]
+    I --> J[Resumen: ventas, costo y ganancia]
+```
 
-## 13. Pendiente de confirmar con el cliente
+1. **Abrir la jornada.** El dueño la abre cuando empieza la noche. Si un día no abre (por ejemplo martes y miércoles), simplemente no abre nada. No hay un corte automático a medianoche, así que una noche puede cruzar de un día al otro sin problema.
+2. **Anotar las ventas.** Hay una cuadrícula de botones por categoría. Un toque suma 1 unidad. Si son varias, se escribe la cantidad. Cada venta descuenta del inventario y guarda **el precio de ese momento**.
+3. **Corregir errores.** Si algo se anotó mal, se **anula** la venta. No se borra: queda marcada como anulada y las unidades regresan exactamente a los lotes de donde salieron.
+4. **Cerrar la jornada.** Al cerrar, la app muestra el resumen de la noche.
+5. **Conteo (opcional).** Antes de cerrar, el dueño puede contar lo que realmente quedó (ver sección 7).
 
-- Si quiere ver el margen en % sobre venta, sobre costo, o ambos como pantalla principal (por ahora, ambos).
-- Si el conteo al cerrar debe ser obligatorio o seguir siendo opcional (por ahora, opcional).
-- Si el stock insuficiente debe bloquear la venta (por ahora, bloquea) o dejarla pasar con una advertencia.
+Solo se puede vender con una jornada abierta, y solo puede haber **una jornada abierta a la vez**. Si el dueño se equivocó al cerrar, puede **reabrir la última**.
+
+### El resumen de la noche
+
+Ejemplo con la venta de las 30 Águila, más un gasto:
+
+| Concepto | Valor |
+|---|---|
+| Ventas (30 × 6.000) | 180.000 |
+| Costo de lo vendido (24 × 5.000 + 6 × 4.300) | 145.800 |
+| **Ganancia** | **34.200** |
+| Gastos de la noche (hielo) | 20.000 |
+| Ganancia menos gastos *(dato informativo)* | 14.200 |
+
+**Los gastos se muestran aparte.** No cambian la ganancia de los productos, para que esa cifra siempre sea limpia. Un gasto es solo una anotación libre (concepto y monto), y la app suma el total.
+
+---
+
+## 7. El conteo al cerrar
+
+Con el tiempo, lo que dice la app y lo que hay en la nevera pueden no coincidir. El conteo sirve para detectarlo.
+
+- **Esperado:** lo que la app cree que queda.
+- **Contado:** lo que el dueño cuenta con sus manos.
+- **Diferencia:** contado − esperado.
+
+Ejemplo: después de vender las 30 Águila, la app espera **18** botellas (todas del lote 2). Se cuentan **16**. La diferencia es **−2**:
+
+| Cómo se mide la pérdida | Valor |
+|---|---|
+| Al costo (2 × 4.300) | 8.600 |
+| Al precio de venta (2 × 6.000) | 12.000 |
+
+Qué hace la app:
+
+- **Si falta:** descuenta esas unidades del inventario, también del lote más viejo, y deja la corrección anotada.
+- **Si sobra:** agrega las unidades como un lote nuevo con el precio de compra del lote más reciente.
+- **No se le cobra a nadie.** Esta app no maneja empleados ni descuentos. Solo mantiene el inventario honesto.
+
+El conteo es **opcional**: si el dueño no cuenta, no pasa nada.
+
+---
+
+## 8. Cómo se cuida la plata
+
+Hay reglas que nunca se rompen, porque aquí un error significa dinero mal contado:
+
+- **Los montos son pesos enteros.** Nunca decimales. Ni 4.300,5 ni centavos.
+- **El precio de la venta se guarda en la venta.** Si el dueño sube la Águila de 6.000 a 6.500, las ventas viejas siguen en 6.000.
+- **Los productos no se borran, se archivan.** Así el historial nunca queda sin su producto.
+- **Anular no es borrar.** La venta queda marcada y las unidades vuelven a su lote original.
+- **No se puede vender más de lo que hay.** Si el stock no alcanza, la app avisa y pide registrar primero la entrada que falta.
+- **Cada cambio queda anotado.** Anular o editar guarda qué había antes y qué hay después.
+- **Todo o nada.** Una venta toca varias cosas a la vez (la venta, los lotes, el stock). Si algo falla a la mitad, no se guarda nada.
+- **La hora es la de Colombia** (`America/Bogota`), aunque por dentro se guarde en UTC.
+
+---
+
+## 9. Lo que la app NO hace (a propósito)
+
+| No hace | Por qué |
+|---|---|
+| Fiado o "me deben" | En el bar se cobra de una. |
+| Deudas del dueño ("le debo a…") | Se queda en el cuaderno. |
+| Empleados ni descuentos por faltantes | El cliente pidió no complicar. La app es solo inventario y dinero. |
+| Combos o reglas especiales de precio | Se resuelve con productos separados (sección 5). |
+| Varios usuarios | Lo usa una sola persona. |
+
+---
+
+## 10. Decisiones tomadas y por qué
+
+| Decisión | Razón |
+|---|---|
+| Se vende lo más viejo primero | Es lo que describió el dueño: quiere ver cuánto ganó con el precio viejo y cuánto habría ganado con el nuevo. |
+| Jornada abierta y cerrada a mano | El dueño decide cuándo abre. Puede haber noches sin abrir y noches que pasan de medianoche. |
+| El pool son productos separados | Para no tener lógica suelta. Todo precio lo escribe el dueño. |
+| No se puede vender sin stock | Si se dejara, no se sabría de qué lote sale el costo. |
+| Los gastos van aparte de la ganancia | La ganancia de productos debe quedar limpia. |
+| El conteo no se cobra a nadie | Sin empleados, no hay a quién cobrarle. Solo corrige el inventario. |
+| Todo funciona sin internet | Es para usar en el bar, en el celular. |
+
+## 11. Preguntas abiertas para el cliente
+
+1. ¿El margen principal que quiere ver es el de venta, el de costo o ambos? *(por ahora, ambos)*
+2. ¿El conteo al cerrar debe ser obligatorio u opcional? *(por ahora, opcional)*
+3. Si falta stock al vender, ¿se bloquea la venta o se deja pasar con una advertencia? *(por ahora, se bloquea)*
+
+---
+
+## 12. Dónde seguir
+
+- Datos, interfaces, arquitectura, pruebas y fases: [`docs/PLAN_TECNICO.md`](docs/PLAN_TECNICO.md).
+- Los ejemplos de este documento (Águila, pool, conteo) son los **casos de prueba** que la lógica debe cumplir.
