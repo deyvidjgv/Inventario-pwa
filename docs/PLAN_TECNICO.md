@@ -10,6 +10,29 @@ Este documento es la fuente de verdad para dividir el trabajo entre dos personas
 
 ---
 
+## 0. Por dónde empezar
+
+Orden recomendado para arrancar sin perderse:
+
+1. **Lee el [`README.md`](../README.md) completo** (la lógica del negocio) y anota las dudas. Si algo no queda claro, se pregunta al dueño antes de programar. No se asume.
+2. **Acuerden quién es Persona A y quién es Persona B** (sección 7) y escríbanlo aquí abajo.
+3. **Preparen el entorno:** JDK 17, Android Studio (versión estable), Git y un celular Android (o emulador con API 26 o superior).
+4. **Fase 0, juntos:**
+   - Persona B crea el proyecto Android con el módulo `:app`.
+   - Persona A crea el módulo `:domain` (librería Java) con los modelos y las interfaces de la sección 4, **vacíos**, sin lógica.
+   - Agreguen un `.gitignore` que excluya `build/`, `.gradle/`, `local.properties`, `*.jks`, `*.keystore` y `google-services.json`.
+   - Súbanlo a `main` en un primer Pull Request. Con eso los dos compilan contra lo mismo.
+5. **Después se separan:**
+   - **Persona A** escribe primero las pruebas de la sección 6 (casos A a G), ve que fallen y luego programa la lógica hasta que pasen.
+   - **Persona B** arma las pantallas de la sección 5 usando implementaciones falsas de las interfaces.
+6. **Cuando una regla cambie,** primero se edita el `README.md` y luego el código.
+
+**Quién es quién** *(completar):*
+- Persona A (dominio y datos): _______________
+- Persona B (app y entrega): _______________
+
+---
+
 ## 1. Qué hace la app
 
 Solo dos cosas: **inventario** y **dinero**.
@@ -317,7 +340,7 @@ jobs:
 - Ramas: `a/<tema>` y `b/<tema>`. Todo entra a `main` con Pull Request revisado por la otra persona.
 - Commits en español, cortos y claros.
 - Ningún cálculo de dinero fuera de `:domain`.
-- Todo cambio de reglas se refleja primero en este README.
+- Todo cambio de reglas se refleja primero en el [`README.md`](../README.md) de la raíz.
 - Nunca subir llaves, contraseñas ni `google-services.json` con claves privadas.
 
 ---
