@@ -117,7 +117,31 @@ Se construyeron repositorios en memoria (`InMemoryRepositories`) y una suite de 
 
 ---
 
-## 3. Estado Actual del Repositorio
+## 3. Refinamientos y Correcciones Implementadas
+
+En base a las pruebas en dispositivo físico, se realizaron las siguientes correcciones de alto impacto:
+
+1. **Ciclo de Vida de Jornadas (Inicio):**
+   * Se agregaron los métodos de consulta `getOpenJornada()` y `getLastClosedJornada()` a `SalesService`.
+   * La pantalla de Inicio ahora detecta en tiempo real si hay una jornada abierta, muestra su hora de apertura y conmuta los botones:
+     * Si está cerrada: Muestra **"Abrir Jornada"** (y **"Reabrir Última"** si hubo una jornada cerrada previa).
+     * Si está abierta: Oculta abrir y muestra el botón destacado **"Cerrar Jornada"**.
+   * El cierre ofrece dos opciones: **Cerrar directo** o **Conteo físico de stock**, permitiendo ingresar las cantidades reales con cálculo automático de diferencias.
+2. **Pre-sembrado y Selector de Categorías (Inventario):**
+   * Se corrigió el error `"La categoria especificada no existe: 1"`. La base de datos ahora pre-siembra automáticamente las categorías base del negocio (`Cervezas`, `Snacks`, `Cigarrillos`, `Licores`, `Juegos / Pool`, `General`).
+   * El diálogo de creación de producto ahora incluye un selector desplegable de categoría.
+   * Cada tarjeta de producto en el inventario incluye ahora un botón directo **"+ Entrar Stock"**, permitiendo cargar lotes con costo unitario en un solo toque sin requerir spinners.
+3. **Márgenes con Gráficos y Barras Visuales (Márgenes):**
+   * **Tarjeta global de cabecera:** Muestra el balance general de rentabilidad y el aviso explicativo del diferencial de compra.
+   * **Barras de progreso por lote:** Gráfico visual de porcentaje de **Margen sobre Venta** (con colores según rentabilidad) y desglose de **Rentabilidad sobre Costo**.
+   * Tarjeta destacada por producto con la comparativa: Ganancia Real vs. Ganancia a Costo Nuevo y la diferencia.
+4. **Ventas Rápidas (Vender):**
+   * Soporte de **pulsación prolongada (long-click)** en los botones de producto para vender cantidades libres (ej. 5 cervezas en un solo registro).
+   * Refresco automático del total acumulado de la noche.
+
+---
+
+## 4. Estado Actual del Repositorio
 
 * **Compilación:** `./gradlew :domain:test` pasa al 100% (9 de 9 pruebas exitosas).
 * **Arquitectura:** Totalmente desacoplada bajo principios Hexagonales / Puertos y Adaptadores.
