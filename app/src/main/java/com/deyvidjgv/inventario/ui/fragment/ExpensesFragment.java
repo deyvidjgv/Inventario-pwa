@@ -85,8 +85,13 @@ public class ExpensesFragment extends Fragment {
                     if (!concept.isEmpty() && !amtStr.isEmpty()) {
                         long amount = Long.parseLong(amtStr);
                         Executors.newSingleThreadExecutor().execute(() -> {
-                            container.getExpenseService().add(concept, amount, Instant.now(), null);
-                            requireActivity().runOnUiThread(this::loadExpenses);
+                            java.util.Optional<com.deyvidjgv.inventario.domain.model.Jornada> openOpt = container.getSalesService().getOpenJornada();
+                            Long jId = openOpt.map(com.deyvidjgv.inventario.domain.model.Jornada::getId).orElse(null);
+                            container.getExpenseService().add(concept, amount, Instant.now(), jId);
+                            requireActivity().runOnUiThread(() -> {
+                                Toast.makeText(getContext(), "Gasto registrado: " + concept, Toast.LENGTH_SHORT).show();
+                                loadExpenses();
+                            });
                         });
                     }
                 })
@@ -133,7 +138,8 @@ public class ExpensesFragment extends Fragment {
             layout.removeAllViews();
 
             TextView tv = new TextView(layout.getContext());
-            tv.setText(e.getConcept() + " — " + CurrencyFormatter.formatCOP(e.getAmount()));
+            String shiftLabel = e.getJornadaId() != null ? " [Turno #" + e.getJornadaId() + "]" : "";
+            tv.setText(e.getConcept() + " — " + CurrencyFormatter.formatCOP(e.getAmount()) + shiftLabel);
             tv.setTextColor(0xFFFFFFFF);
             tv.setTextSize(16f);
             LinearLayout.LayoutParams p = new LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f);

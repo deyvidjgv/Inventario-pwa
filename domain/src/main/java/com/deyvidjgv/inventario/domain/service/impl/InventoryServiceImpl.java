@@ -101,4 +101,9 @@ public class InventoryServiceImpl implements InventoryService {
     public List<Category> listCategories() {
         return categoryRepository.findAll();
     }
+
+    @Override
+    public java.util.Optional<Product> getProduct(long productId) {
+        return productRepository.findById(productId);
+    }
 }

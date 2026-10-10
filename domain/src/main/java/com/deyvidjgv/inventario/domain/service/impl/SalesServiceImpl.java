@@ -49,6 +49,19 @@ public class SalesServiceImpl implements SalesService {
     }
 
     @Override
+    public List<Sale> getSalesForJornada(long jornadaId) {
+        return saleRepository.findByJornadaId(jornadaId);
+    }
+
+    @Override
+    public Optional<Sale> getLastNonVoidedSale(long jornadaId) {
+        List<Sale> sales = saleRepository.findByJornadaId(jornadaId);
+        return sales.stream()
+                .filter(s -> !s.isVoided())
+                .max(Comparator.comparing(Sale::getCreatedAt));
+    }
+
+    @Override
     public Jornada openJornada(Instant at) {
         return transactionManager.executeInTransaction(() -> {
             Optional<Jornada> existingOpen = jornadaRepository.findOpen();

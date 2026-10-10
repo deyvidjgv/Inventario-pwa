@@ -141,8 +141,51 @@ En base a las pruebas en dispositivo físico, se realizaron las siguientes corre
 
 ---
 
-## 4. Estado Actual del Repositorio
+## 5. Actualizaciones Recientes (Feedback de Pruebas en Vivo)
 
-* **Compilación:** `./gradlew :domain:test` pasa al 100% (9 de 9 pruebas exitosas).
-* **Arquitectura:** Totalmente desacoplada bajo principios Hexagonales / Puertos y Adaptadores.
-* **Trazabilidad:** Todo el código respeta estrictamente los requerimientos de [`README.md`](../README.md) y [`docs/PLAN_TECNICO.md`](PLAN_TECNICO.md).
+En respuesta a las pruebas de usuario en dispositivo móvil, se implementaron cuatro mejoras clave de usabilidad y precisión financiera:
+
+### 1. Ventana Emergente de Cantidad en Ventas (1 Toque)
+* **Antes:** Tocar un producto sumaba automáticamente 1 unidad, obligando a pulsar repetidamente si el cliente pedía múltiples artículos.
+* **Ahora:** Un solo toque sobre cualquier producto abre una ventana modal intuitiva y rápida:
+  * Contador con botones `[-]` y `[+]`.
+  * Campo numérico editable con selección directa.
+  * Botones de incremento rápido en un solo toque: `+1`, `+2`, `+5`, `+6` (six-pack) y `+10`.
+  * Cálculo dinámico del total en tiempo real (`Total a cobrar: $#,##0 COP`).
+  * Validación de stock disponible antes de registrar la venta.
+
+### 2. Anulación de Ventas Persistente y Consulta Directa a Base de Datos
+* **Antes:** La anulación dependía de una variable en memoria efímera que se perdía al cambiar de pantalla, arrojando el mensaje de que "no había ventas recientes".
+* **Ahora:** Al pulsar **"Anular Venta"**, el sistema consulta directamente en SQLite Room mediante `salesService.getLastNonVoidedSale(jornadaId)`:
+  * Presenta un diálogo con el detalle exacto: nombre del producto, unidades, total en COP y hora de la venta.
+  * Al confirmar, anula la venta y reingresa inmediatamente las unidades a sus lotes originales según la asignación FIFO.
+  * Incluye la opción **"Ver todas de la sesión"**, que despliega la lista cronológica de ventas de la noche para anular cualquier venta específica si el error no fue en la última.
+
+### 3. Gráficas Visuales Nativas en la Pantalla de Márgenes
+* **Antes:** La pantalla mostraba principalmente textos y listas numéricas sin gráficas representativas.
+* **Ahora:** Se diseñaron e implementaron dos vistas gráficas nativas en Android (`Canvas`/`Paint`), 100% offline y sin librerías externas pesadas:
+  * **`FinancialChartView` (Gráfica de Barras Comparativa):** Dibuja tres barras verticales con bordes redondeados y colores de alto contraste:
+    * **Ventas** (Verde `#00E676`)
+    * **Costo de Mercancía** (Rojo `#FF5252`)
+    * **Ganancia Real** (Dorado `#FFD54F`)
+    * Muestra montos exactos en COP encima de cada barra y porcentajes de margen relativo.
+  * **`ProductDistributionChartView` (Barras Horizontales por Producto):** Gráfica de barras horizontales mostrando el volumen de ventas y la proporción de ganancia vs. costo de cada artículo vendido.
+  * **Selector de Período `[ Turno ]` vs `[ Histórico ]`:** Permite alternar con un botón entre los datos de la jornada actual de la noche y el histórico total acumulado.
+  * **Tarjetas Detalladas Inferiores:** Debajo de las gráficas, cada producto cuenta con su tarjeta explicativa indicando cuántas unidades se vendieron, total en COP, costo, ganancia neta, porcentaje de margen y estado de lotes en inventario.
+
+### 4. Vinculación de Gastos a la Jornada y Reflejo en Ganancia de la Sesión
+* **Antes:** Al registrar un gasto se guardaba con `jornadaId = null`, por lo que el resumen de la noche no lo asociaba a la jornada activa, mostrando \$0 en "Gastos de la noche" y sin restar de la ganancia.
+* **Ahora:** 
+  * `ExpensesFragment` detecta la jornada abierta y asocia el `jornadaId` correspondiente.
+  * `ReportService.summary(jornadaId)` contabiliza tanto los gastos etiquetados al turno como los gastos libres registrados dentro del horario de la jornada abierta.
+  * En la pantalla principal (`HomeFragment`), se añadió un botón de acceso directo **`+ Registrar Gasto de Turno`** en la tarjeta financiera.
+  * Se resalta el rubro de gastos en color rojizo (`-$#,##0`) y se destaca prominentemente la **Ganancia Neta (Caja)** como la métrica final de la noche.
+
+---
+
+## 6. Estado Actual del Repositorio
+
+* **Compilación y Pruebas:** `./gradlew test` y `./gradlew :app:assembleDebug` ejecutados exitosamente al 100%.
+* **APK Generado:** Disponible y servido para descarga en red local o instalación vía USB/ADB.
+* **Trazabilidad:** Todo el desarrollo respeta estrictamente la arquitectura limpia y el plan técnico original.
+

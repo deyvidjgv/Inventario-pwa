@@ -45,24 +45,79 @@ public class ReportServiceImpl implements ReportService {
         Product product = productRepository.findById(productId)
                 .orElseThrow(() -> new DomainException(ErrorCode.PRODUCT_NOT_FOUND, "Producto no encontrado: " + productId));
 
-        List<StockLot> activeLots = stockLotRepository.findActiveByProductId(productId);
-        List<LotMargin> lotMargins = activeLots.stream()
-                .map(lot -> new LotMargin(lot.getId(), lot.getUnitCost(), lot.getQuantityRemaining(), product.getSalePrice()))
-                .collect(Collectors.toList());
-
-        Optional<StockLot> newestLot = stockLotRepository.findNewestByProductId(productId);
-        Long newestLotCost = newestLot.map(StockLot::getUnitCost).orElse(null);
-
-        // Ventas no anuladas de este producto
         List<Sale> productSales = saleRepository.findByProductId(productId).stream()
                 .filter(s -> !s.isVoided())
                 .collect(Collectors.toList());
 
+        return calculateProductMargin(product, productSales);
+    }
+
+    @Override
+    public List<ProductMarginReport> allMargins() {
+        return productRepository.findActive().stream()
+                .map(p -> margins(p.getId()))
+                .collect(Collectors.toList());
+    }
+
+    @Override
+    public ProductMarginReport marginsForJornada(long productId, long jornadaId) {
+        Product product = productRepository.findById(productId)
+                .orElseThrow(() -> new DomainException(ErrorCode.PRODUCT_NOT_FOUND, "Producto no encontrado: " + productId));
+
+        List<Sale> jornadaSales = saleRepository.findByJornadaId(jornadaId).stream()
+                .filter(s -> !s.isVoided() && s.getProductId() == productId)
+                .collect(Collectors.toList());
+
+        return calculateProductMargin(product, jornadaSales);
+    }
+
+    @Override
+    public List<ProductMarginReport> allMarginsForJornada(long jornadaId) {
+        List<Sale> jornadaSales = saleRepository.findByJornadaId(jornadaId).stream()
+                .filter(s -> !s.isVoided())
+                .collect(Collectors.toList());
+
+        Map<Long, List<Sale>> salesByProduct = jornadaSales.stream()
+                .collect(Collectors.groupingBy(Sale::getProductId));
+
+        List<ProductMarginReport> reports = new ArrayList<>();
+        List<Product> activeProducts = productRepository.findActive();
+
+        for (Product product : activeProducts) {
+            List<Sale> pSales = salesByProduct.getOrDefault(product.getId(), Collections.emptyList());
+            reports.add(calculateProductMargin(product, pSales));
+        }
+
+        // Ordenar: primero los que tienen ventas (mayor venta primero), luego el resto
+        reports.sort((a, b) -> {
+            int cmp = Long.compare(b.getTotalSales(), a.getTotalSales());
+            if (cmp != 0) return cmp;
+            return a.getProductName().compareToIgnoreCase(b.getProductName());
+        });
+
+        return reports;
+    }
+
+    private ProductMarginReport calculateProductMargin(Product product, List<Sale> sales) {
+        List<StockLot> activeLots = stockLotRepository.findActiveByProductId(product.getId());
+        List<LotMargin> lotMargins = activeLots.stream()
+                .map(lot -> new LotMargin(lot.getId(), lot.getUnitCost(), lot.getQuantityRemaining(), product.getSalePrice()))
+                .collect(Collectors.toList());
+
+        Optional<StockLot> newestLot = stockLotRepository.findNewestByProductId(product.getId());
+        Long newestLotCost = newestLot.map(StockLot::getUnitCost).orElse(null);
+
+        int unitsSold = 0;
+        long totalSales = 0;
         long realProfit = 0;
         long profitWithNewCost = 0;
 
-        if (product.isTracksStock()) {
-            for (Sale sale : productSales) {
+        for (Sale sale : sales) {
+            if (sale.isVoided()) continue;
+            unitsSold += sale.getQuantity();
+            totalSales += sale.getTotal();
+
+            if (product.isTracksStock()) {
                 List<SaleLotAllocation> allocations = saleRepository.findAllocationsBySaleId(sale.getId());
                 for (SaleLotAllocation alloc : allocations) {
                     realProfit += (sale.getUnitPrice() - alloc.getUnitCost()) * alloc.getQuantity();
@@ -72,31 +127,26 @@ public class ReportServiceImpl implements ReportService {
                         profitWithNewCost += (sale.getUnitPrice() - alloc.getUnitCost()) * alloc.getQuantity();
                     }
                 }
-            }
-        } else {
-            // Producto sin stock (e.g. Juego Pool): costo 0, todo es ganancia
-            for (Sale sale : productSales) {
+            } else {
                 realProfit += sale.getTotal();
                 profitWithNewCost += sale.getTotal();
             }
         }
 
+        long totalCost = totalSales - realProfit;
+
         return new ProductMarginReport(
-                productId,
+                product.getId(),
                 product.getName(),
                 product.getSalePrice(),
                 newestLotCost,
                 lotMargins,
                 realProfit,
-                profitWithNewCost
+                profitWithNewCost,
+                unitsSold,
+                totalSales,
+                totalCost
         );
-    }
-
-    @Override
-    public List<ProductMarginReport> allMargins() {
-        return productRepository.findActive().stream()
-                .map(p -> margins(p.getId()))
-                .collect(Collectors.toList());
     }
 
     @Override
@@ -120,7 +170,17 @@ public class ReportServiceImpl implements ReportService {
             }
         }
 
-        List<Expense> expenses = expenseRepository.findByJornadaId(jornadaId);
+        List<Expense> expenses = new ArrayList<>(expenseRepository.findByJornadaId(jornadaId));
+        Instant opened = jornada.getOpenedAt();
+        Instant closed = jornada.getClosedAt() != null ? jornada.getClosedAt() : Instant.now();
+        List<Expense> periodExpenses = expenseRepository.findByPeriod(opened, closed);
+        Set<Long> alreadyIncludedIds = expenses.stream().map(Expense::getId).collect(Collectors.toSet());
+        for (Expense pe : periodExpenses) {
+            if (pe.getJornadaId() == null && !alreadyIncludedIds.contains(pe.getId())) {
+                expenses.add(pe);
+            }
+        }
+
         long totalExpenses = expenses.stream().mapToLong(Expense::getAmount).sum();
         List<StockAdjustment> adjustments = stockAdjustmentRepository.findByJornadaId(jornadaId);
 

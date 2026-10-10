@@ -43,6 +43,7 @@ public class HomeFragment extends Fragment {
     private MaterialButton btnClose;
     private MaterialButton btnReopen;
     private MaterialButton btnBackup;
+    private MaterialButton btnQuickExpense;
 
     private AppContainer container;
     private Long activeJornadaId = null;
@@ -66,11 +67,13 @@ public class HomeFragment extends Fragment {
         btnClose = view.findViewById(R.id.btn_close_jornada);
         btnReopen = view.findViewById(R.id.btn_reopen_jornada);
         btnBackup = view.findViewById(R.id.btn_goto_backup);
+        btnQuickExpense = view.findViewById(R.id.btn_quick_expense);
 
         btnOpen.setOnClickListener(v -> handleOpenJornada());
         btnClose.setOnClickListener(v -> handleCloseJornada());
         btnReopen.setOnClickListener(v -> handleReopenJornada());
         btnBackup.setOnClickListener(v -> ((MainActivity) requireActivity()).loadFragment(new BackupFragment(), "Respaldo"));
+        btnQuickExpense.setOnClickListener(v -> showQuickExpenseDialog());
 
         loadJornadaState();
         return view;
@@ -142,7 +145,11 @@ public class HomeFragment extends Fragment {
             textSales.setText(CurrencyFormatter.formatCOP(summary.getTotalSales()));
             textCost.setText(CurrencyFormatter.formatCOP(summary.getTotalCost()));
             textGrossProfit.setText(CurrencyFormatter.formatCOP(summary.getGrossProfit()));
-            textExpenses.setText(CurrencyFormatter.formatCOP(summary.getTotalExpenses()));
+            if (summary.getTotalExpenses() > 0) {
+                textExpenses.setText("-" + CurrencyFormatter.formatCOP(summary.getTotalExpenses()));
+            } else {
+                textExpenses.setText("$0");
+            }
             textNetInformative.setText(CurrencyFormatter.formatCOP(summary.getNetInformativeProfit()));
         } else {
             textSales.setText("$0");
@@ -151,6 +158,44 @@ public class HomeFragment extends Fragment {
             textExpenses.setText("$0");
             textNetInformative.setText("$0");
         }
+    }
+
+    private void showQuickExpenseDialog() {
+        LinearLayout layout = new LinearLayout(getContext());
+        layout.setOrientation(LinearLayout.VERTICAL);
+        layout.setPadding(40, 20, 40, 20);
+
+        EditText inputConcept = new EditText(getContext());
+        inputConcept.setHint("Concepto (e.g. Hielo, Bolsas, Limpieza)");
+        layout.addView(inputConcept);
+
+        EditText inputAmount = new EditText(getContext());
+        inputAmount.setHint("Monto en COP (e.g. 5000)");
+        inputAmount.setInputType(android.text.InputType.TYPE_CLASS_NUMBER);
+        layout.addView(inputAmount);
+
+        new AlertDialog.Builder(getContext())
+                .setTitle("Registrar Gasto de Turno")
+                .setMessage("Este gasto se restará inmediatamente de las ganancias de la sesión.")
+                .setView(layout)
+                .setPositiveButton("Registrar", (d, w) -> {
+                    String concept = inputConcept.getText().toString().trim();
+                    String amtStr = inputAmount.getText().toString().trim();
+                    if (!concept.isEmpty() && !amtStr.isEmpty()) {
+                        long amount = Long.parseLong(amtStr);
+                        Executors.newSingleThreadExecutor().execute(() -> {
+                            Optional<Jornada> openOpt = container.getSalesService().getOpenJornada();
+                            Long jId = openOpt.map(Jornada::getId).orElse(activeJornadaId);
+                            container.getExpenseService().add(concept, amount, Instant.now(), jId);
+                            requireActivity().runOnUiThread(() -> {
+                                Toast.makeText(getContext(), "Gasto registrado: " + concept + " (-" + CurrencyFormatter.formatCOP(amount) + ")", Toast.LENGTH_SHORT).show();
+                                loadJornadaState();
+                            });
+                        });
+                    }
+                })
+                .setNegativeButton("Cancelar", null)
+                .show();
     }
 
     private void handleOpenJornada() {

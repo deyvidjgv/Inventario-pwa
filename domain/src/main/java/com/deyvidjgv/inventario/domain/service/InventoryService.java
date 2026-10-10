@@ -15,4 +15,5 @@ public interface InventoryService {
     List<ProductStock> listStock();
     com.deyvidjgv.inventario.domain.model.Category createCategory(String name);
     List<com.deyvidjgv.inventario.domain.model.Category> listCategories();
+    java.util.Optional<Product> getProduct(long productId);
 }

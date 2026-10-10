@@ -10,6 +10,8 @@ import java.util.List;
 public interface ReportService {
     ProductMarginReport margins(long productId);
     List<ProductMarginReport> allMargins();
+    ProductMarginReport marginsForJornada(long productId, long jornadaId);
+    List<ProductMarginReport> allMarginsForJornada(long jornadaId);
     JornadaSummary summary(long jornadaId);
     PeriodSummary summary(LocalDate from, LocalDate to);
 }

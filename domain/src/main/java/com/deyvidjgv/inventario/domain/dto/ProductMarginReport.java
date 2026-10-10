@@ -12,10 +12,20 @@ public class ProductMarginReport {
     private final long realProfit;
     private final long profitWithNewCost;
     private final long difference;
+    private final int unitsSold;
+    private final long totalSales;
+    private final long totalCost;
 
     public ProductMarginReport(long productId, String productName, long currentSalePrice,
                                Long newestLotCost, List<LotMargin> lotMargins,
                                long realProfit, long profitWithNewCost) {
+        this(productId, productName, currentSalePrice, newestLotCost, lotMargins, realProfit, profitWithNewCost, 0, 0, 0);
+    }
+
+    public ProductMarginReport(long productId, String productName, long currentSalePrice,
+                               Long newestLotCost, List<LotMargin> lotMargins,
+                               long realProfit, long profitWithNewCost,
+                               int unitsSold, long totalSales, long totalCost) {
         this.productId = productId;
         this.productName = productName != null ? productName : "";
         this.currentSalePrice = currentSalePrice;
@@ -24,6 +34,9 @@ public class ProductMarginReport {
         this.realProfit = realProfit;
         this.profitWithNewCost = profitWithNewCost;
         this.difference = profitWithNewCost - realProfit;
+        this.unitsSold = unitsSold;
+        this.totalSales = totalSales;
+        this.totalCost = totalCost;
     }
 
     public long getProductId() {
@@ -56,5 +69,17 @@ public class ProductMarginReport {
 
     public long getDifference() {
         return difference;
+    }
+
+    public int getUnitsSold() {
+        return unitsSold;
+    }
+
+    public long getTotalSales() {
+        return totalSales;
+    }
+
+    public long getTotalCost() {
+        return totalCost;
     }
 }
