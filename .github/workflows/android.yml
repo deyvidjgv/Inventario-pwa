@@ -1,0 +1,39 @@
+name: Android CI / Compilación APK
+
+on:
+  push:
+    branches: [ "main" ]
+  pull_request:
+    branches: [ "main" ]
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+
+    steps:
+    - name: Clonar repositorio
+      uses: actions/checkout@v4
+
+    - name: Configurar JDK 17 (Temurin)
+      uses: actions/setup-java@v4
+      with:
+        java-version: '17'
+        distribution: 'temurin'
+        cache: gradle
+
+    - name: Dar permisos de ejecución a gradlew
+      run: chmod +x gradlew
+
+    - name: Ejecutar pruebas unitarias de lógica de negocio (:domain:test)
+      run: ./gradlew :domain:test --no-daemon
+
+    - name: Compilar APK (Debug e instalable)
+      run: ./gradlew :app:assembleDebug --no-daemon
+
+    - name: Publicar APK como artefacto de GitHub Actions
+      uses: actions/upload-artifact@v4
+      with:
+        name: inventario-pool-debug-apk
+        path: app/build/outputs/apk/debug/*.apk
+        retention-days: 30

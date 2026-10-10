@@ -1,0 +1,22 @@
+<menu xmlns:android="http://schemas.android.com/apk/res/android">
+    <item
+        android:id="@+id/nav_home"
+        android:icon="@android:drawable/ic_menu_agenda"
+        android:title="@string/nav_home" />
+    <item
+        android:id="@+id/nav_sales"
+        android:icon="@android:drawable/ic_input_add"
+        android:title="@string/nav_sales" />
+    <item
+        android:id="@+id/nav_inventory"
+        android:icon="@android:drawable/ic_menu_view"
+        android:title="@string/nav_inventory" />
+    <item
+        android:id="@+id/nav_margins"
+        android:icon="@android:drawable/ic_menu_sort_by_size"
+        android:title="@string/nav_margins" />
+    <item
+        android:id="@+id/nav_money"
+        android:icon="@android:drawable/ic_menu_myplaces"
+        android:title="@string/nav_money" />
+</menu>

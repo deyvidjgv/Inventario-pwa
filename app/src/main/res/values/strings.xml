@@ -1,0 +1,15 @@
+<resources>
+    <string name="app_name">Inventario Pool</string>
+    <string name="nav_home">Inicio</string>
+    <string name="nav_sales">Vender</string>
+    <string name="nav_inventory">Inventario</string>
+    <string name="nav_margins">Márgenes</string>
+    <string name="nav_money">Dinero</string>
+    <string name="nav_backup">Respaldo</string>
+
+    <string name="open_jornada">Abrir Jornada</string>
+    <string name="close_jornada">Cerrar Jornada</string>
+    <string name="reopen_jornada">Reabrir Última Jornada</string>
+    <string name="jornada_open_status">Jornada Abierta</string>
+    <string name="jornada_closed_status">Jornada Cerrada</string>
+</resources>
