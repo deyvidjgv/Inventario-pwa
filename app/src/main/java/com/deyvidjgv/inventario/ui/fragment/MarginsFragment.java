@@ -17,6 +17,7 @@ import com.deyvidjgv.inventario.di.AppContainer;
 import com.deyvidjgv.inventario.domain.dto.LotMargin;
 import com.deyvidjgv.inventario.domain.dto.ProductMarginReport;
 import com.deyvidjgv.inventario.domain.model.Jornada;
+import com.deyvidjgv.inventario.ui.MainActivity;
 import com.deyvidjgv.inventario.ui.util.CurrencyFormatter;
 import com.deyvidjgv.inventario.ui.widget.FinancialChartView;
 import com.deyvidjgv.inventario.ui.widget.ProductDistributionChartView;
@@ -59,8 +60,12 @@ public class MarginsFragment extends Fragment {
         toggleGroupPeriod.check(R.id.btn_filter_shift);
         toggleGroupPeriod.addOnButtonCheckedListener((group, checkedId, isChecked) -> {
             if (isChecked) {
-                isShiftMode = (checkedId == R.id.btn_filter_shift);
-                loadMargins();
+                if (checkedId == R.id.btn_filter_daily) {
+                    ((MainActivity) requireActivity()).loadFragment(new DailyReportFragment(), "Reporte Diario");
+                } else {
+                    isShiftMode = (checkedId == R.id.btn_filter_shift);
+                    loadMargins();
+                }
             }
         });
 

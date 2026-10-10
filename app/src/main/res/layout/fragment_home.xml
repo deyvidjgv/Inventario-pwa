@@ -246,6 +246,22 @@
             </LinearLayout>
         </com.google.android.material.card.MaterialCardView>
 
+        <!-- Botón de Reporte Diario (Entradas y Salidas) -->
+        <com.google.android.material.button.MaterialButton
+            android:id="@+id/btn_goto_daily_report"
+            android:layout_width="match_parent"
+            android:layout_height="56dp"
+            android:text="📅 Reporte Diario: Entradas, Salidas y Ganancia"
+            android:textSize="15sp"
+            app:backgroundTint="@color/surface"
+            app:strokeColor="@color/primary"
+            app:strokeWidth="1.5dp"
+            android:textColor="@color/primary"
+            app:icon="@android:drawable/ic_menu_today"
+            app:iconTint="@color/primary"
+            app:iconGravity="textStart"
+            android:layout_marginBottom="12dp" />
+
         <!-- Botón de Respaldo -->
         <com.google.android.material.button.MaterialButton
             android:id="@+id/btn_goto_backup"

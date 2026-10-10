@@ -15,6 +15,7 @@ import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 
 import java.time.Instant;
+import java.time.LocalDate;
 import java.time.temporal.ChronoUnit;
 import java.util.Collections;
 import java.util.HashMap;
@@ -386,5 +387,56 @@ class BusinessRulesTest {
         assertEquals(marginBefore.getRealProfit(), marginAfter.getRealProfit());
         assertEquals(marginBefore.getProfitWithNewCost(), marginAfter.getProfitWithNewCost());
         assertEquals(marginBefore.getDifference(), marginAfter.getDifference());
+    }
+
+    @Test
+    @DisplayName("Reporte Diario: Entradas de mercancía, salidas, gastos, ventas y ganancia neta por fecha")
+    void testDailyReport() {
+        LocalDate today = LocalDate.now();
+
+        // 1. Crear producto y entrar mercancía hoy
+        Product poker = inventoryService.createProduct("Póker 330ml", cervezasCategory.getId(), 5000L, true);
+        inventoryService.receiveStock(poker.getId(), 20, 3000L, Instant.now(), "Compra Bavaria");
+
+        // 2. Abrir jornada y vender 5 unidades
+        salesService.openJornada(Instant.now());
+        salesService.sell(poker.getId(), 5); // Total: 25.000, Costo: 15.000, Ganancia: 10.000
+
+        // 3. Registrar gasto hoy
+        expenseService.add("Hielo y bolsas", 4000L, Instant.now(), null);
+
+        // 4. Consultar reporte diario
+        com.deyvidjgv.inventario.domain.dto.DailyReport report = reportService.dailyReport(today);
+
+        assertEquals(today, report.getDate());
+        assertEquals(25000L, report.getTotalSales());
+        assertEquals(15000L, report.getTotalCost());
+        assertEquals(10000L, report.getGrossProfit());
+        assertEquals(4000L, report.getTotalExpenses());
+        assertEquals(6000L, report.getNetProfit());
+        assertEquals(1, report.getSalesCount());
+
+        // Verificar productos vendidos
+        assertEquals(1, report.getProductsSold().size());
+        com.deyvidjgv.inventario.domain.dto.ProductSaleDetail saleDetail = report.getProductsSold().get(0);
+        assertEquals("Póker 330ml", saleDetail.getProductName());
+        assertEquals(5, saleDetail.getUnitsSold());
+        assertEquals(25000L, saleDetail.getTotalSales());
+        assertEquals(15000L, saleDetail.getTotalCost());
+        assertEquals(10000L, saleDetail.getRealProfit());
+
+        // Verificar entradas de mercancía
+        assertEquals(1, report.getStockEntries().size());
+        com.deyvidjgv.inventario.domain.dto.StockEntryDetail entry = report.getStockEntries().get(0);
+        assertEquals("Póker 330ml", entry.getProductName());
+        assertEquals(20, entry.getQuantity());
+        assertEquals(3000L, entry.getUnitCost());
+        assertEquals(60000L, entry.getTotalInvestment());
+        assertEquals("Compra Bavaria", entry.getNote());
+
+        // Verificar gastos
+        assertEquals(1, report.getExpenses().size());
+        assertEquals("Hielo y bolsas", report.getExpenses().get(0).getConcept());
+        assertEquals(4000L, report.getExpenses().get(0).getAmount());
     }
 }

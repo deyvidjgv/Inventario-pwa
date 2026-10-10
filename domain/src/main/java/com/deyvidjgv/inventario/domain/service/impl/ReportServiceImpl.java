@@ -223,4 +223,95 @@ public class ReportServiceImpl implements ReportService {
 
         return new PeriodSummary(from, to, totalSales, totalCost, totalExpenses, salesCount);
     }
+
+    @Override
+    public com.deyvidjgv.inventario.domain.dto.DailyReport dailyReport(LocalDate date) {
+        Instant start = date.atStartOfDay(BOGOTA_ZONE).toInstant();
+        Instant end = date.plusDays(1).atStartOfDay(BOGOTA_ZONE).toInstant();
+
+        // 1. Ventas no anuladas en el día
+        List<Sale> sales = saleRepository.findByPeriod(start, end).stream()
+                .filter(s -> !s.isVoided())
+                .collect(Collectors.toList());
+
+        long totalSales = 0;
+        long totalCost = 0;
+        int salesCount = sales.size();
+
+        Map<Long, String> productNames = productRepository.findAll().stream()
+                .collect(Collectors.toMap(Product::getId, Product::getName, (a, b) -> a));
+
+        Map<Long, List<Sale>> salesByProduct = sales.stream()
+                .collect(Collectors.groupingBy(Sale::getProductId));
+
+        List<com.deyvidjgv.inventario.domain.dto.ProductSaleDetail> productsSold = new ArrayList<>();
+
+        for (Map.Entry<Long, List<Sale>> entry : salesByProduct.entrySet()) {
+            long pId = entry.getKey();
+            List<Sale> pSales = entry.getValue();
+            String pName = productNames.getOrDefault(pId, "Producto #" + pId);
+
+            int units = 0;
+            long pTotalSales = 0;
+            long pTotalCost = 0;
+
+            for (Sale s : pSales) {
+                units += s.getQuantity();
+                pTotalSales += s.getTotal();
+                List<SaleLotAllocation> allocs = saleRepository.findAllocationsBySaleId(s.getId());
+                for (SaleLotAllocation a : allocs) {
+                    pTotalCost += a.getTotalCost();
+                }
+            }
+
+            long pProfit = pTotalSales - pTotalCost;
+            totalSales += pTotalSales;
+            totalCost += pTotalCost;
+
+            productsSold.add(new com.deyvidjgv.inventario.domain.dto.ProductSaleDetail(pId, pName, units, pTotalSales, pTotalCost, pProfit));
+        }
+
+        productsSold.sort((a, b) -> Long.compare(b.getTotalSales(), a.getTotalSales()));
+
+        // 2. Gastos en el día
+        List<Expense> expenses = expenseRepository.findByPeriod(start, end);
+        long totalExpenses = expenses.stream().mapToLong(Expense::getAmount).sum();
+
+        // 3. Entradas de mercancía en el día
+        List<StockLot> lots = stockLotRepository.findAll().stream()
+                .filter(l -> !l.getReceivedAt().isBefore(start) && l.getReceivedAt().isBefore(end))
+                .sorted(Comparator.comparing(StockLot::getReceivedAt).reversed())
+                .collect(Collectors.toList());
+
+        List<com.deyvidjgv.inventario.domain.dto.StockEntryDetail> stockEntries = new ArrayList<>();
+        for (StockLot l : lots) {
+            String pName = productNames.getOrDefault(l.getProductId(), "Producto #" + l.getProductId());
+            stockEntries.add(new com.deyvidjgv.inventario.domain.dto.StockEntryDetail(
+                    l.getId(),
+                    l.getProductId(),
+                    pName,
+                    l.getQuantityIn(),
+                    l.getUnitCost(),
+                    l.getReceivedAt(),
+                    l.getNote()
+            ));
+        }
+
+        // 4. Ajustes / Mermas de inventario en el día
+        List<StockAdjustment> adjustments = stockAdjustmentRepository.findAll().stream()
+                .filter(a -> !a.getCreatedAt().isBefore(start) && a.getCreatedAt().isBefore(end))
+                .collect(Collectors.toList());
+
+        return new com.deyvidjgv.inventario.domain.dto.DailyReport(
+                date,
+                totalSales,
+                totalCost,
+                totalExpenses,
+                salesCount,
+                productsSold,
+                stockEntries,
+                expenses,
+                adjustments
+        );
+    }
 }

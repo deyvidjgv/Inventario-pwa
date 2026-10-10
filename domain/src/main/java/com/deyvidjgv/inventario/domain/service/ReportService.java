@@ -14,4 +14,5 @@ public interface ReportService {
     List<ProductMarginReport> allMarginsForJornada(long jornadaId);
     JornadaSummary summary(long jornadaId);
     PeriodSummary summary(LocalDate from, LocalDate to);
+    com.deyvidjgv.inventario.domain.dto.DailyReport dailyReport(LocalDate date);
 }

@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="utf-8"?>
+<menu xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto">
+    <item
+        android:id="@+id/action_daily_report"
+        android:icon="@android:drawable/ic_menu_today"
+        android:title="Reporte Diario"
+        app:showAsAction="always" />
+</menu>

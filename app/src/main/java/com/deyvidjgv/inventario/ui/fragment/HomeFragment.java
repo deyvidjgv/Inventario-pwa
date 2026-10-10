@@ -68,12 +68,14 @@ public class HomeFragment extends Fragment {
         btnReopen = view.findViewById(R.id.btn_reopen_jornada);
         btnBackup = view.findViewById(R.id.btn_goto_backup);
         btnQuickExpense = view.findViewById(R.id.btn_quick_expense);
+        MaterialButton btnGotoDailyReport = view.findViewById(R.id.btn_goto_daily_report);
 
         btnOpen.setOnClickListener(v -> handleOpenJornada());
         btnClose.setOnClickListener(v -> handleCloseJornada());
         btnReopen.setOnClickListener(v -> handleReopenJornada());
         btnBackup.setOnClickListener(v -> ((MainActivity) requireActivity()).loadFragment(new BackupFragment(), "Respaldo"));
         btnQuickExpense.setOnClickListener(v -> showQuickExpenseDialog());
+        btnGotoDailyReport.setOnClickListener(v -> ((MainActivity) requireActivity()).loadFragment(new DailyReportFragment(), "Reporte Diario"));
 
         loadJornadaState();
         return view;

@@ -34,8 +34,17 @@
                 style="@style/Widget.MaterialComponents.Button.OutlinedButton"
                 android:layout_width="wrap_content"
                 android:layout_height="36dp"
-                android:paddingHorizontal="12dp"
+                android:paddingHorizontal="10dp"
                 android:text="Turno"
+                android:textSize="12sp" />
+
+            <com.google.android.material.button.MaterialButton
+                android:id="@+id/btn_filter_daily"
+                style="@style/Widget.MaterialComponents.Button.OutlinedButton"
+                android:layout_width="wrap_content"
+                android:layout_height="36dp"
+                android:paddingHorizontal="10dp"
+                android:text="Por Día"
                 android:textSize="12sp" />
 
             <com.google.android.material.button.MaterialButton
@@ -43,7 +52,7 @@
                 style="@style/Widget.MaterialComponents.Button.OutlinedButton"
                 android:layout_width="wrap_content"
                 android:layout_height="36dp"
-                android:paddingHorizontal="12dp"
+                android:paddingHorizontal="10dp"
                 android:text="Histórico"
                 android:textSize="12sp" />
         </com.google.android.material.button.MaterialButtonToggleGroup>

@@ -181,11 +181,25 @@ En respuesta a las pruebas de usuario en dispositivo móvil, se implementaron cu
   * En la pantalla principal (`HomeFragment`), se añadió un botón de acceso directo **`+ Registrar Gasto de Turno`** en la tarjeta financiera.
   * Se resalta el rubro de gastos en color rojizo (`-$#,##0`) y se destaca prominentemente la **Ganancia Neta (Caja)** como la métrica final de la noche.
 
+### 5. Reporte Diario Detallado por Fecha (Entradas, Salidas, Ventas y Ganancias)
+* **Requerimiento:** Permitir al usuario seleccionar cualquier fecha en el calendario y consultar de forma exhaustiva todo lo que ocurrió ese día: cuánto se ganó, cuánto se gastó, qué productos se vendieron, y todo lo que entró y salió.
+* **Implementación:**
+  * **DTOs y Dominio:** Se crearon los DTOs inmutables `DailyReport`, `ProductSaleDetail` y `StockEntryDetail`, y el método `ReportService.dailyReport(LocalDate date)`.
+  * **Selector de Día:** Diálogo de calendario interactivo (`DatePickerDialog`) y controles rápidos de navegación día previo/siguiente `[ ◀ ]` y `[ ▶ ]`.
+  * **Balance Financiero del Día:** Tarjeta con Ventas Totales, Costo de Mercancía, Ganancia Bruta, Gastos del Día y la **Ganancia Neta del Día** en verde destacado con su porcentaje de margen sobre ventas.
+  * **🛒 ¿Qué se vendió ese día?:** Lista detallada de cada producto vendido con sus unidades, total facturado en COP, costo asignado en FIFO y ganancia real.
+  * **📥 ¿Qué entró ese día?:** Entradas de mercancía registradas a bodega (lotes de compra) con unidades recibidas, costo unitario, inversión total, hora y proveedor o nota.
+  * **📤 ¿Qué salió ese día?:** Gastos libres y de caja con hora y concepto, además de pérdidas por mermas o ajustes físicos en conteos.
+  * **Puntos de Acceso:**
+    * Botón destacado en pantalla de Inicio (`HomeFragment`): **"📅 Reporte Diario: Entradas, Salidas y Ganancia"**.
+    * Botón **"Por Día"** en el selector de período de Márgenes (`MarginsFragment`).
+    * Icono de calendario en la barra superior (`Toolbar` de `MainActivity`).
+
 ---
 
 ## 6. Estado Actual del Repositorio
 
-* **Compilación y Pruebas:** `./gradlew test` y `./gradlew :app:assembleDebug` ejecutados exitosamente al 100%.
+* **Compilación y Pruebas:** `./gradlew test` (10 de 10 pruebas exitosas) y `./gradlew :app:assembleDebug` ejecutados al 100%.
 * **APK Generado:** Disponible y servido para descarga en red local o instalación vía USB/ADB.
 * **Trazabilidad:** Todo el desarrollo respeta estrictamente la arquitectura limpia y el plan técnico original.
 

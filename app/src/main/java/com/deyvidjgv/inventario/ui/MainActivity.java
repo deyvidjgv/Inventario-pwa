@@ -21,6 +21,15 @@ public class MainActivity extends AppCompatActivity {
         toolbar = findViewById(R.id.toolbar);
         bottomNav = findViewById(R.id.bottom_navigation);
 
+        toolbar.inflateMenu(R.menu.main_toolbar_menu);
+        toolbar.setOnMenuItemClickListener(item -> {
+            if (item.getItemId() == R.id.action_daily_report) {
+                loadFragment(new DailyReportFragment(), "Reporte Diario");
+                return true;
+            }
+            return false;
+        });
+
         bottomNav.setOnItemSelectedListener(item -> {
             int itemId = item.getItemId();
             if (itemId == R.id.nav_home) {
