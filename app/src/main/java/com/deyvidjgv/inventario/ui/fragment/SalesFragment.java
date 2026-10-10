@@ -1,5 +1,6 @@
 package com.deyvidjgv.inventario.ui.fragment;
 
+import android.app.Activity;
 import android.app.AlertDialog;
 import android.content.Context;
 import android.os.Bundle;
@@ -69,8 +70,19 @@ public class SalesFragment extends Fragment {
         loadData();
     }
 
+    private void safeRunOnUiThread(Runnable r) {
+        Activity act = getActivity();
+        if (act != null && isAdded()) {
+            act.runOnUiThread(() -> {
+                if (isAdded()) {
+                    r.run();
+                }
+            });
+        }
+    }
+
     private void loadData() {
-        Executors.newSingleThreadExecutor().execute(() -> {
+        container.getExecutor().execute(() -> {
             try {
                 List<ProductStock> stocks = container.getInventoryService().listStock();
                 Optional<Jornada> openOpt = container.getSalesService().getOpenJornada();
@@ -82,13 +94,11 @@ public class SalesFragment extends Fragment {
                 }
                 final long finalTotal = nightTotal;
 
-                requireActivity().runOnUiThread(() -> {
+                safeRunOnUiThread(() -> {
                     adapter.updateData(stocks);
                     textTotal.setText(CurrencyFormatter.formatCOP(finalTotal));
                 });
-            } catch (Exception e) {
-                // Ignore
-            }
+            } catch (Exception ignored) {}
         });
     }
 
@@ -234,24 +244,24 @@ public class SalesFragment extends Fragment {
     }
 
     private void executeSale(Product product, int quantity) {
-        Executors.newSingleThreadExecutor().execute(() -> {
+        container.getExecutor().execute(() -> {
             try {
                 Sale sale = container.getSalesService().sell(product.getId(), quantity);
-                requireActivity().runOnUiThread(() -> {
+                safeRunOnUiThread(() -> {
                     Toast.makeText(getContext(), "✓ +" + quantity + " " + product.getName() + " (" + CurrencyFormatter.formatCOP(sale.getTotal()) + ")", Toast.LENGTH_SHORT).show();
                     loadData();
                 });
             } catch (DomainException e) {
-                requireActivity().runOnUiThread(() -> Toast.makeText(getContext(), e.getMessage(), Toast.LENGTH_LONG).show());
+                safeRunOnUiThread(() -> Toast.makeText(getContext(), e.getMessage(), Toast.LENGTH_LONG).show());
             }
         });
     }
 
     private void voidLastSale() {
-        Executors.newSingleThreadExecutor().execute(() -> {
+        container.getExecutor().execute(() -> {
             Optional<Jornada> openOpt = container.getSalesService().getOpenJornada();
             if (!openOpt.isPresent()) {
-                requireActivity().runOnUiThread(() ->
+                safeRunOnUiThread(() ->
                         Toast.makeText(getContext(), "No hay una jornada abierta actualmente", Toast.LENGTH_SHORT).show());
                 return;
             }
@@ -260,7 +270,7 @@ public class SalesFragment extends Fragment {
             Optional<Sale> lastSaleOpt = container.getSalesService().getLastNonVoidedSale(jornadaId);
 
             if (!lastSaleOpt.isPresent()) {
-                requireActivity().runOnUiThread(() ->
+                safeRunOnUiThread(() ->
                         Toast.makeText(getContext(), "No hay ventas activas para anular en esta sesión", Toast.LENGTH_SHORT).show());
                 return;
             }
@@ -273,7 +283,8 @@ public class SalesFragment extends Fragment {
                     .withZone(java.time.ZoneId.of("America/Bogota"));
             String timeStr = timeFmt.format(lastSale.getCreatedAt());
 
-            requireActivity().runOnUiThread(() -> {
+            safeRunOnUiThread(() -> {
+                if (getContext() == null) return;
                 new AlertDialog.Builder(getContext())
                         .setTitle("Anular Última Venta")
                         .setMessage("¿Deseas anular la última venta de esta sesión?\n\n" +
@@ -283,15 +294,15 @@ public class SalesFragment extends Fragment {
                                 "• Hora: " + timeStr + "\n\n" +
                                 "Las unidades regresarán inmediatamente al inventario en sus lotes originales.")
                         .setPositiveButton("Sí, Anular Venta", (d, w) -> {
-                            Executors.newSingleThreadExecutor().execute(() -> {
+                            container.getExecutor().execute(() -> {
                                 try {
                                     container.getSalesService().voidSale(lastSale.getId());
-                                    requireActivity().runOnUiThread(() -> {
+                                    safeRunOnUiThread(() -> {
                                         Toast.makeText(getContext(), "Venta anulada. +" + lastSale.getQuantity() + " " + prodName + " restauradas al stock.", Toast.LENGTH_LONG).show();
                                         loadData();
                                     });
                                 } catch (DomainException e) {
-                                    requireActivity().runOnUiThread(() -> Toast.makeText(getContext(), e.getMessage(), Toast.LENGTH_LONG).show());
+                                    safeRunOnUiThread(() -> Toast.makeText(getContext(), e.getMessage(), Toast.LENGTH_LONG).show());
                                 }
                             });
                         })
@@ -303,7 +314,7 @@ public class SalesFragment extends Fragment {
     }
 
     private void showSessionSalesDialog(long jornadaId) {
-        Executors.newSingleThreadExecutor().execute(() -> {
+        container.getExecutor().execute(() -> {
             List<Sale> allSales = container.getSalesService().getSalesForJornada(jornadaId);
             List<Sale> activeSales = new ArrayList<>();
             for (Sale s : allSales) {
@@ -315,7 +326,7 @@ public class SalesFragment extends Fragment {
             activeSales.sort((a, b) -> b.getCreatedAt().compareTo(a.getCreatedAt()));
 
             if (activeSales.isEmpty()) {
-                requireActivity().runOnUiThread(() ->
+                safeRunOnUiThread(() ->
                         Toast.makeText(getContext(), "No hay ventas activas en esta sesión", Toast.LENGTH_SHORT).show());
                 return;
             }
@@ -336,25 +347,26 @@ public class SalesFragment extends Fragment {
                 items[i] = pName + " x" + s.getQuantity() + " — " + CurrencyFormatter.formatCOP(s.getTotal()) + " (" + timeFmt.format(s.getCreatedAt()) + ")";
             }
 
-            requireActivity().runOnUiThread(() -> {
+            safeRunOnUiThread(() -> {
+                if (getContext() == null) return;
                 new AlertDialog.Builder(getContext())
                         .setTitle("Selecciona la venta a anular")
                         .setItems(items, (dialog, which) -> {
                             Sale selected = activeSales.get(which);
                             String pName = namesById.getOrDefault(selected.getProductId(), "Producto #" + selected.getProductId());
                             new AlertDialog.Builder(getContext())
-                                    .setTitle("Confirmar Anulación")
+                                     .setTitle("Confirmar Anulación")
                                     .setMessage("¿Anular la venta de " + selected.getQuantity() + " " + pName + " por " + CurrencyFormatter.formatCOP(selected.getTotal()) + "?")
                                     .setPositiveButton("Sí, Anular", (d, w) -> {
-                                        Executors.newSingleThreadExecutor().execute(() -> {
+                                        container.getExecutor().execute(() -> {
                                             try {
                                                 container.getSalesService().voidSale(selected.getId());
-                                                requireActivity().runOnUiThread(() -> {
+                                                safeRunOnUiThread(() -> {
                                                     Toast.makeText(getContext(), "Venta de " + pName + " anulada con éxito.", Toast.LENGTH_SHORT).show();
                                                     loadData();
                                                 });
                                             } catch (DomainException e) {
-                                                requireActivity().runOnUiThread(() -> Toast.makeText(getContext(), e.getMessage(), Toast.LENGTH_LONG).show());
+                                                safeRunOnUiThread(() -> Toast.makeText(getContext(), e.getMessage(), Toast.LENGTH_LONG).show());
                                             }
                                         });
                                     })

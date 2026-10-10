@@ -38,6 +38,9 @@ public interface StockLotDao {
     @Query("SELECT * FROM stock_lots ORDER BY receivedAt ASC, id ASC")
     List<StockLotEntity> findAll();
 
+    @Query("SELECT * FROM stock_lots WHERE receivedAt >= :from AND receivedAt < :to ORDER BY receivedAt DESC, id DESC")
+    List<StockLotEntity> findByPeriod(java.time.Instant from, java.time.Instant to);
+
     @Query("DELETE FROM stock_lots")
     void deleteAll();
 }

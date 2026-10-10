@@ -19,8 +19,13 @@ public class RoomCategoryRepository implements CategoryRepository {
     @Override
     public Category save(Category category) {
         CategoryEntity entity = CategoryEntity.fromDomain(category);
-        long id = categoryDao.insert(entity);
-        return category.withId(id);
+        if (category.getId() != null) {
+            categoryDao.update(entity);
+            return category;
+        } else {
+            long id = categoryDao.insert(entity);
+            return category.withId(id);
+        }
     }
 
     @Override

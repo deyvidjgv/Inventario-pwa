@@ -15,6 +15,7 @@ public interface SaleRepository {
     List<Sale> findByPeriod(Instant from, Instant to);
     List<Sale> findByProductId(long productId);
     List<SaleLotAllocation> findAllocationsBySaleId(long saleId);
+    List<SaleLotAllocation> findAllocationsBySaleIds(List<Long> saleIds);
     List<SaleLotAllocation> findAllocationsByProductId(long productId);
     List<Sale> findAll();
     List<SaleLotAllocation> findAllAllocations();

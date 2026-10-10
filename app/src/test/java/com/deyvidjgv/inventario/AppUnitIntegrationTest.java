@@ -150,4 +150,69 @@ public class AppUnitIntegrationTest {
         assertEquals(3800L, detail.getUnitCost());
         assertEquals(-7600L, detail.getTotalLossOrGainAtCost());
     }
+
+    @Test
+    public void testGsonInstantTypeAdapterWithNull_BUG021() {
+        com.google.gson.Gson gson = new com.google.gson.GsonBuilder()
+                .registerTypeAdapter(Instant.class, new com.google.gson.TypeAdapter<Instant>() {
+                    @Override
+                    public void write(com.google.gson.stream.JsonWriter out, Instant value) throws java.io.IOException {
+                        if (value == null) {
+                            out.nullValue();
+                        } else {
+                            out.value(value.toString());
+                        }
+                    }
+
+                    @Override
+                    public Instant read(com.google.gson.stream.JsonReader in) throws java.io.IOException {
+                        if (in.peek() == com.google.gson.stream.JsonToken.NULL) {
+                            in.nextNull();
+                            return null;
+                        }
+                        return Instant.parse(in.nextString());
+                    }
+                })
+                .create();
+
+        // 1. Serialization with null
+        Jornada jornada = new Jornada(1L, Instant.parse("2026-10-10T12:00:00Z"), null);
+        String json = gson.toJson(jornada);
+        assertNotNull(json);
+
+        // 2. Deserialization with null
+        Jornada deserialized = gson.fromJson(json, Jornada.class);
+        assertEquals(Long.valueOf(1L), deserialized.getId());
+        assertEquals(Instant.parse("2026-10-10T12:00:00Z"), deserialized.getOpenedAt());
+        assertNull(deserialized.getClosedAt());
+    }
+
+    @Test
+    public void testProductAndCategoryPreservesIdForUpdate_BUG007() {
+        // En SQLite Room, si se usa INSERT OR REPLACE con FK RESTRICT, se produce error.
+        // La entidad debe preservar su ID para que el repositorio ejecute DAO.update() en vez de insert().
+        Product prod = new Product(42L, "Águila Light", 1L, 5000L, true, true);
+        ProductEntity entity = ProductEntity.fromDomain(prod);
+        assertNotNull(entity.id);
+        assertEquals(Long.valueOf(42L), entity.id);
+
+        Product updatedDomain = new Product(42L, "Águila Light 330ml", 1L, 5500L, true, true);
+        ProductEntity updatedEntity = ProductEntity.fromDomain(updatedDomain);
+        assertEquals(entity.id, updatedEntity.id);
+        assertEquals("Águila Light 330ml", updatedEntity.name);
+        assertEquals(5500L, updatedEntity.salePrice);
+    }
+
+    @Test
+    public void testDailyReportBogotaTimezoneBounds_BUG020() {
+        java.time.ZoneId bogotaZone = java.time.ZoneId.of("America/Bogota");
+        LocalDate date = LocalDate.of(2026, 10, 10);
+        Instant startOfDay = date.atStartOfDay(bogotaZone).toInstant();
+        Instant endOfDay = date.plusDays(1).atStartOfDay(bogotaZone).toInstant();
+
+        // En UTC, America/Bogota (UTC-5) a medianoche es a las 05:00 UTC del mismo día
+        assertEquals(Instant.parse("2026-10-10T05:00:00Z"), startOfDay);
+        assertEquals(Instant.parse("2026-10-11T05:00:00Z"), endOfDay);
+        assertTrue(endOfDay.isAfter(startOfDay));
+    }
 }

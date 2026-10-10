@@ -50,6 +50,9 @@ public abstract class SaleDao {
     @Query("SELECT * FROM sale_lot_allocations WHERE saleId = :saleId")
     public abstract List<SaleLotAllocationEntity> findAllocationsBySaleId(long saleId);
 
+    @Query("SELECT * FROM sale_lot_allocations WHERE saleId IN (:saleIds)")
+    public abstract List<SaleLotAllocationEntity> findAllocationsBySaleIds(List<Long> saleIds);
+
     @Query("SELECT a.* FROM sale_lot_allocations a INNER JOIN sales s ON a.saleId = s.id WHERE s.productId = :productId")
     public abstract List<SaleLotAllocationEntity> findAllocationsByProductId(long productId);
 

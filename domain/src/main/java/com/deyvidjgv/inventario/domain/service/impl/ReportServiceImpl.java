@@ -234,6 +234,10 @@ public class ReportServiceImpl implements ReportService {
                 .filter(s -> !s.isVoided())
                 .collect(Collectors.toList());
 
+        List<Long> saleIds = sales.stream().map(Sale::getId).filter(Objects::nonNull).collect(Collectors.toList());
+        Map<Long, List<SaleLotAllocation>> allocsBySale = saleRepository.findAllocationsBySaleIds(saleIds).stream()
+                .collect(Collectors.groupingBy(SaleLotAllocation::getSaleId));
+
         long totalSales = 0;
         long totalCost = 0;
         int salesCount = sales.size();
@@ -258,7 +262,7 @@ public class ReportServiceImpl implements ReportService {
             for (Sale s : pSales) {
                 units += s.getQuantity();
                 pTotalSales += s.getTotal();
-                List<SaleLotAllocation> allocs = saleRepository.findAllocationsBySaleId(s.getId());
+                List<SaleLotAllocation> allocs = allocsBySale.getOrDefault(s.getId(), Collections.emptyList());
                 for (SaleLotAllocation a : allocs) {
                     pTotalCost += a.getTotalCost();
                 }
@@ -277,10 +281,9 @@ public class ReportServiceImpl implements ReportService {
         List<Expense> expenses = expenseRepository.findByPeriod(start, end);
         long totalExpenses = expenses.stream().mapToLong(Expense::getAmount).sum();
 
-        // 3. Entradas de mercancía en el día
-        List<StockLot> lots = stockLotRepository.findAll().stream()
-                .filter(l -> !l.getReceivedAt().isBefore(start) && l.getReceivedAt().isBefore(end))
-                .sorted(Comparator.comparing(StockLot::getReceivedAt).reversed())
+        // 3. Entradas de mercancía en el día (excluyendo ajustes de conteo físico)
+        List<StockLot> lots = stockLotRepository.findByPeriod(start, end).stream()
+                .filter(l -> l.getNote() == null || !l.getNote().startsWith("Ajuste conteo físico"))
                 .collect(Collectors.toList());
 
         List<com.deyvidjgv.inventario.domain.dto.StockEntryDetail> stockEntries = new ArrayList<>();
@@ -298,9 +301,7 @@ public class ReportServiceImpl implements ReportService {
         }
 
         // 4. Ajustes / Mermas de inventario en el día
-        List<StockAdjustment> adjustments = stockAdjustmentRepository.findAll().stream()
-                .filter(a -> !a.getCreatedAt().isBefore(start) && a.getCreatedAt().isBefore(end))
-                .collect(Collectors.toList());
+        List<StockAdjustment> adjustments = stockAdjustmentRepository.findByPeriod(start, end);
 
         List<com.deyvidjgv.inventario.domain.dto.StockAdjustmentDetail> adjustmentDetails = new ArrayList<>();
         for (StockAdjustment adj : adjustments) {

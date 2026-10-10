@@ -139,6 +139,14 @@ public class InMemoryRepositories {
         }
 
         @Override
+        public List<StockLot> findByPeriod(Instant from, Instant to) {
+            return storage.values().stream()
+                    .filter(l -> !l.getReceivedAt().isBefore(from) && l.getReceivedAt().isBefore(to))
+                    .sorted((a, b) -> b.getReceivedAt().compareTo(a.getReceivedAt()))
+                    .collect(Collectors.toList());
+        }
+
+        @Override
         public List<StockLot> findAll() {
             return new ArrayList<>(storage.values());
         }
@@ -244,6 +252,15 @@ public class InMemoryRepositories {
         }
 
         @Override
+        public List<SaleLotAllocation> findAllocationsBySaleIds(List<Long> saleIds) {
+            if (saleIds == null || saleIds.isEmpty()) return Collections.emptyList();
+            Set<Long> set = new HashSet<>(saleIds);
+            return allocationsStorage.stream()
+                    .filter(a -> set.contains(a.getSaleId()))
+                    .collect(Collectors.toList());
+        }
+
+        @Override
         public List<SaleLotAllocation> findAllocationsByProductId(long productId) {
             Set<Long> saleIds = findByProductId(productId).stream()
                     .map(Sale::getId)
@@ -286,6 +303,14 @@ public class InMemoryRepositories {
         public List<StockAdjustment> findByJornadaId(long jornadaId) {
             return storage.values().stream()
                     .filter(a -> a.getJornadaId() == jornadaId)
+                    .collect(Collectors.toList());
+        }
+
+        @Override
+        public List<StockAdjustment> findByPeriod(Instant from, Instant to) {
+            return storage.values().stream()
+                    .filter(a -> !a.getCreatedAt().isBefore(from) && a.getCreatedAt().isBefore(to))
+                    .sorted((a, b) -> b.getCreatedAt().compareTo(a.getCreatedAt()))
                     .collect(Collectors.toList());
         }
 

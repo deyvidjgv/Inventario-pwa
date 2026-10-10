@@ -2,6 +2,7 @@ package com.deyvidjgv.inventario.domain.port;
 
 import com.deyvidjgv.inventario.domain.model.StockLot;
 
+import java.time.Instant;
 import java.util.List;
 import java.util.Optional;
 
@@ -12,6 +13,7 @@ public interface StockLotRepository {
     List<StockLot> findActiveByProductId(long productId); // FIFO ordenado: receivedAt ASC, id ASC
     List<StockLot> findAllByProductId(long productId);
     Optional<StockLot> findNewestByProductId(long productId); // receivedAt DESC, id DESC
+    List<StockLot> findByPeriod(Instant from, Instant to);
     List<StockLot> findAll();
     void deleteAll();
 }

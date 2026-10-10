@@ -1,5 +1,6 @@
 package com.deyvidjgv.inventario.ui.fragment;
 
+import android.app.Activity;
 import android.app.AlertDialog;
 import android.os.Bundle;
 import android.view.LayoutInflater;
@@ -20,11 +21,13 @@ import com.google.android.material.button.MaterialButton;
 
 import java.time.Instant;
 import java.time.LocalDate;
+import java.time.ZoneId;
 import java.util.ArrayList;
 import java.util.List;
-import java.util.concurrent.Executors;
 
 public class ExpensesFragment extends Fragment {
+
+    private static final ZoneId BOGOTA_ZONE = ZoneId.of("America/Bogota");
 
     private RecyclerView recyclerView;
     private MaterialButton btnAddExpense;
@@ -41,7 +44,7 @@ public class ExpensesFragment extends Fragment {
         btnAddExpense = view.findViewById(R.id.btn_add_expense);
 
         recyclerView.setLayoutManager(new LinearLayoutManager(getContext()));
-        adapter = new ExpenseAdapter(new ArrayList<>(), this::deleteExpense);
+        adapter = new ExpenseAdapter(new ArrayList<>(), this::confirmDeleteExpense);
         recyclerView.setAdapter(adapter);
 
         btnAddExpense.setOnClickListener(v -> showAddExpenseDialog());
@@ -50,19 +53,30 @@ public class ExpensesFragment extends Fragment {
         return view;
     }
 
+    private void safeRunOnUiThread(Runnable r) {
+        Activity act = getActivity();
+        if (act != null && isAdded()) {
+            act.runOnUiThread(() -> {
+                if (isAdded()) {
+                    r.run();
+                }
+            });
+        }
+    }
+
     private void loadExpenses() {
-        Executors.newSingleThreadExecutor().execute(() -> {
+        container.getExecutor().execute(() -> {
             try {
-                LocalDate today = LocalDate.now();
+                LocalDate today = LocalDate.now(BOGOTA_ZONE);
                 List<Expense> list = container.getExpenseService().list(today.minusDays(30), today);
-                requireActivity().runOnUiThread(() -> adapter.updateData(list));
-            } catch (Exception e) {
-                // Ignore
-            }
+                safeRunOnUiThread(() -> adapter.updateData(list));
+            } catch (Exception ignored) {}
         });
     }
 
     private void showAddExpenseDialog() {
+        if (getContext() == null) return;
+
         LinearLayout layout = new LinearLayout(getContext());
         layout.setOrientation(LinearLayout.VERTICAL);
         layout.setPadding(32, 16, 32, 16);
@@ -72,44 +86,72 @@ public class ExpensesFragment extends Fragment {
         layout.addView(inputConcept);
 
         EditText inputAmount = new EditText(getContext());
-        inputAmount.setHint("Monto (COP)");
+        inputAmount.setHint("Monto en COP (e.g. 5000)");
         inputAmount.setInputType(android.text.InputType.TYPE_CLASS_NUMBER);
         layout.addView(inputAmount);
 
         new AlertDialog.Builder(getContext())
-                .setTitle("Registrar Gasto Libre")
+                .setTitle("Registrar Gasto")
                 .setView(layout)
                 .setPositiveButton("Registrar", (d, w) -> {
                     String concept = inputConcept.getText().toString().trim();
                     String amtStr = inputAmount.getText().toString().trim();
-                    if (!concept.isEmpty() && !amtStr.isEmpty()) {
-                        long amount;
+                    if (concept.isEmpty()) {
+                        Toast.makeText(getContext(), "Por favor ingresa el concepto del gasto", Toast.LENGTH_SHORT).show();
+                        return;
+                    }
+                    if (amtStr.isEmpty()) {
+                        Toast.makeText(getContext(), "Por favor ingresa un monto", Toast.LENGTH_SHORT).show();
+                        return;
+                    }
+                    long amount;
+                    try {
+                        amount = Long.parseLong(amtStr);
+                    } catch (NumberFormatException e) {
+                        Toast.makeText(getContext(), "Por favor ingresa un monto válido", Toast.LENGTH_SHORT).show();
+                        return;
+                    }
+                    if (amount <= 0) {
+                        Toast.makeText(getContext(), "El monto del gasto debe ser mayor a 0", Toast.LENGTH_SHORT).show();
+                        return;
+                    }
+
+                    container.getExecutor().execute(() -> {
                         try {
-                            amount = Long.parseLong(amtStr);
-                        } catch (NumberFormatException e) {
-                            Toast.makeText(getContext(), "Por favor ingresa un monto válido", Toast.LENGTH_SHORT).show();
-                            return;
-                        }
-                        Executors.newSingleThreadExecutor().execute(() -> {
                             java.util.Optional<com.deyvidjgv.inventario.domain.model.Jornada> openOpt = container.getSalesService().getOpenJornada();
                             Long jId = openOpt.map(com.deyvidjgv.inventario.domain.model.Jornada::getId).orElse(null);
                             container.getExpenseService().add(concept, amount, Instant.now(), jId);
-                            requireActivity().runOnUiThread(() -> {
+                            safeRunOnUiThread(() -> {
                                 Toast.makeText(getContext(), "Gasto registrado: " + concept, Toast.LENGTH_SHORT).show();
                                 loadExpenses();
                             });
-                        });
-                    }
+                        } catch (Exception e) {
+                            safeRunOnUiThread(() -> Toast.makeText(getContext(), "Error: " + e.getMessage(), Toast.LENGTH_LONG).show());
+                        }
+                    });
                 })
                 .setNegativeButton("Cancelar", null)
                 .show();
     }
 
-    private void deleteExpense(Expense expense) {
-        Executors.newSingleThreadExecutor().execute(() -> {
-            container.getExpenseService().delete(expense.getId());
-            requireActivity().runOnUiThread(this::loadExpenses);
-        });
+    private void confirmDeleteExpense(Expense expense) {
+        if (getContext() == null) return;
+
+        new AlertDialog.Builder(getContext())
+                .setTitle("Eliminar Gasto")
+                .setMessage("¿Estás seguro de que deseas eliminar el gasto \"" + expense.getConcept() + "\" por " + CurrencyFormatter.formatCOP(expense.getAmount()) + "?")
+                .setPositiveButton("Sí, Eliminar", (d, w) -> {
+                    container.getExecutor().execute(() -> {
+                        try {
+                            container.getExpenseService().delete(expense.getId());
+                            safeRunOnUiThread(this::loadExpenses);
+                        } catch (Exception e) {
+                            safeRunOnUiThread(() -> Toast.makeText(getContext(), "Error: " + e.getMessage(), Toast.LENGTH_LONG).show());
+                        }
+                    });
+                })
+                .setNegativeButton("Cancelar", null)
+                .show();
     }
 
     private static class ExpenseAdapter extends RecyclerView.Adapter<ExpenseAdapter.ViewHolder> {

@@ -28,7 +28,7 @@ import com.google.android.material.card.MaterialCardView;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Optional;
-import java.util.concurrent.Executors;
+
 
 public class MarginsFragment extends Fragment {
 
@@ -80,7 +80,7 @@ public class MarginsFragment extends Fragment {
     }
 
     private void loadMargins() {
-        Executors.newSingleThreadExecutor().execute(() -> {
+        container.getExecutor().execute(() -> {
             try {
                 List<ProductMarginReport> reports;
                 String subtitle;
@@ -108,11 +108,17 @@ public class MarginsFragment extends Fragment {
 
                 final List<ProductMarginReport> finalReports = reports;
                 final String finalSubtitle = subtitle;
-                requireActivity().runOnUiThread(() -> adapter.updateData(finalReports, finalSubtitle));
+                safeRunOnUiThread(() -> adapter.updateData(finalReports, finalSubtitle));
             } catch (Exception e) {
                 // Ignore
             }
         });
+    }
+
+    private void safeRunOnUiThread(Runnable action) {
+        if (isAdded() && getActivity() != null) {
+            requireActivity().runOnUiThread(action);
+        }
     }
 
     private static class VisualMarginsAdapter extends RecyclerView.Adapter<RecyclerView.ViewHolder> {

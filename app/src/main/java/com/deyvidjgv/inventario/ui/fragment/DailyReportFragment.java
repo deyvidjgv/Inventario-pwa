@@ -34,8 +34,9 @@ public class DailyReportFragment extends Fragment {
     private static final DateTimeFormatter DATE_DISPLAY_FORMAT = DateTimeFormatter.ofPattern("EEEE, d 'de' MMMM yyyy", new Locale("es", "CO"));
     private static final DateTimeFormatter TIME_FORMAT = DateTimeFormatter.ofPattern("hh:mm a").withZone(BOGOTA_ZONE);
 
-    private LocalDate selectedDate = LocalDate.now();
+    private LocalDate selectedDate = LocalDate.now(BOGOTA_ZONE);
     private AppContainer container;
+    private long querySeq = 0;
 
     private MaterialButton btnPrevDay;
     private MaterialButton btnPickDate;
@@ -99,7 +100,7 @@ public class DailyReportFragment extends Fragment {
     }
 
     private void loadReport() {
-        LocalDate today = LocalDate.now();
+        LocalDate today = LocalDate.now(BOGOTA_ZONE);
         String dateLabel;
         if (selectedDate.equals(today)) {
             dateLabel = "📅 Hoy (" + selectedDate.format(DateTimeFormatter.ofPattern("dd/MM/yyyy")) + ")";
@@ -110,13 +111,20 @@ public class DailyReportFragment extends Fragment {
         }
         btnPickDate.setText(dateLabel);
 
-        Executors.newSingleThreadExecutor().execute(() -> {
+        final long thisSeq = ++querySeq;
+        final LocalDate reqDate = selectedDate;
+
+        container.getExecutor().execute(() -> {
             try {
-                DailyReport report = container.getReportService().dailyReport(selectedDate);
-                requireActivity().runOnUiThread(() -> renderReport(report));
-            } catch (Exception e) {
-                // Ignore
-            }
+                DailyReport report = container.getReportService().dailyReport(reqDate);
+                android.app.Activity act = getActivity();
+                if (act != null && isAdded()) {
+                    act.runOnUiThread(() -> {
+                        if (!isAdded() || thisSeq != querySeq || !reqDate.equals(selectedDate)) return;
+                        renderReport(report);
+                    });
+                }
+            } catch (Exception ignored) {}
         });
     }
 

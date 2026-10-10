@@ -7,7 +7,11 @@ import com.deyvidjgv.inventario.domain.port.*;
 import com.deyvidjgv.inventario.domain.service.*;
 import com.deyvidjgv.inventario.domain.service.impl.*;
 
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+
 public class AppContainer {
+    private final ExecutorService executor = Executors.newFixedThreadPool(4);
     private final InventoryService inventoryService;
     private final SalesService salesService;
     private final ReportService reportService;
@@ -92,5 +96,9 @@ public class AppContainer {
 
     public BackupService getBackupService() {
         return backupService;
+    }
+
+    public ExecutorService getExecutor() {
+        return executor;
     }
 }

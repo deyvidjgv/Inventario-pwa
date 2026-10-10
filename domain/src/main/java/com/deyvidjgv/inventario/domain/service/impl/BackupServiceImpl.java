@@ -60,6 +60,10 @@ public class BackupServiceImpl implements BackupService {
 
                     @Override
                     public Instant read(JsonReader in) throws IOException {
+                        if (in.peek() == com.google.gson.stream.JsonToken.NULL) {
+                            in.nextNull();
+                            return null;
+                        }
                         String str = in.nextString();
                         return str != null ? Instant.parse(str) : null;
                     }
@@ -104,14 +108,14 @@ public class BackupServiceImpl implements BackupService {
         }
 
         transactionManager.executeInTransaction(() -> {
-            // Limpiar datos existentes
-            categoryRepository.deleteAll();
-            productRepository.deleteAll();
-            stockLotRepository.deleteAll();
-            jornadaRepository.deleteAll();
-            saleRepository.deleteAll();
+            // Limpiar datos existentes en orden inverso a dependencias FK (hijos primero)
+            saleRepository.deleteAll(); // Borra allocations y luego sales
             stockAdjustmentRepository.deleteAll();
             expenseRepository.deleteAll();
+            stockLotRepository.deleteAll();
+            productRepository.deleteAll();
+            categoryRepository.deleteAll();
+            jornadaRepository.deleteAll();
             auditLogRepository.deleteAll();
 
             // Restaurar entidades

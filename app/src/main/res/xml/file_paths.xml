@@ -1,0 +1,5 @@
+<?xml version="1.0" encoding="utf-8"?>
+<paths>
+    <cache-path name="backup_cache" path="." />
+    <external-files-path name="backup_docs" path="." />
+</paths>

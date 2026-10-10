@@ -56,12 +56,23 @@ public class InventoryServiceImpl implements InventoryService {
     }
 
     @Override
+    public void unarchiveProduct(long productId) {
+        Product product = productRepository.findById(productId)
+                .orElseThrow(() -> new DomainException(ErrorCode.PRODUCT_NOT_FOUND, "Producto no encontrado: " + productId));
+        Product unarchived = product.withActive(true);
+        productRepository.save(unarchived);
+    }
+
+    @Override
     public StockLot receiveStock(long productId, int quantity, long unitCost, Instant at, String note) {
         Product product = productRepository.findById(productId)
                 .orElseThrow(() -> new DomainException(ErrorCode.PRODUCT_NOT_FOUND, "Producto no encontrado: " + productId));
 
         if (!product.isActive()) {
             throw new DomainException(ErrorCode.PRODUCT_INACTIVE, "No se puede ingresar stock a un producto archivado");
+        }
+        if (!product.isTracksStock()) {
+            throw new DomainException(ErrorCode.PRODUCT_INACTIVE, "No se puede ingresar stock a un producto de servicio (sin control de inventario)");
         }
         if (quantity <= 0) {
             throw new DomainException(ErrorCode.INVALID_QUANTITY, "La cantidad a ingresar debe ser mayor a 0");
@@ -77,7 +88,12 @@ public class InventoryServiceImpl implements InventoryService {
 
     @Override
     public List<ProductStock> listStock() {
-        List<Product> products = productRepository.findAll();
+        return listStock(false);
+    }
+
+    @Override
+    public List<ProductStock> listStock(boolean includeArchived) {
+        List<Product> products = includeArchived ? productRepository.findAll() : productRepository.findActive();
         Map<Long, String> categoriesById = categoryRepository.findAll().stream()
                 .collect(Collectors.toMap(Category::getId, Category::getName, (a, b) -> a));
 

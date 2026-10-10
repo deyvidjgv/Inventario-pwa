@@ -19,6 +19,9 @@ public interface StockAdjustmentDao {
     @Query("SELECT * FROM stock_adjustments ORDER BY createdAt DESC")
     List<StockAdjustmentEntity> findAll();
 
+    @Query("SELECT * FROM stock_adjustments WHERE createdAt >= :from AND createdAt < :to ORDER BY createdAt DESC")
+    List<StockAdjustmentEntity> findByPeriod(java.time.Instant from, java.time.Instant to);
+
     @Query("DELETE FROM stock_adjustments")
     void deleteAll();
 }

@@ -1,6 +1,8 @@
 package com.deyvidjgv.inventario.ui.fragment;
 
+import android.app.Activity;
 import android.app.AlertDialog;
+import android.content.Context;
 import android.os.Bundle;
 import android.view.LayoutInflater;
 import android.view.View;
@@ -24,7 +26,6 @@ import java.time.Instant;
 import java.time.ZoneId;
 import java.time.format.DateTimeFormatter;
 import java.util.*;
-import java.util.concurrent.Executors;
 
 public class HomeFragment extends Fragment {
 
@@ -73,9 +74,9 @@ public class HomeFragment extends Fragment {
         btnOpen.setOnClickListener(v -> handleOpenJornada());
         btnClose.setOnClickListener(v -> handleCloseJornada());
         btnReopen.setOnClickListener(v -> handleReopenJornada());
-        btnBackup.setOnClickListener(v -> ((MainActivity) requireActivity()).loadFragment(new BackupFragment(), "Respaldo"));
+        btnBackup.setOnClickListener(v -> ((MainActivity) requireActivity()).loadFragment(new BackupFragment(), "Respaldo", true));
         btnQuickExpense.setOnClickListener(v -> showQuickExpenseDialog());
-        btnGotoDailyReport.setOnClickListener(v -> ((MainActivity) requireActivity()).loadFragment(new DailyReportFragment(), "Reporte Diario"));
+        btnGotoDailyReport.setOnClickListener(v -> ((MainActivity) requireActivity()).loadFragment(new DailyReportFragment(), "Reporte Diario", true));
 
         loadJornadaState();
         return view;
@@ -87,8 +88,19 @@ public class HomeFragment extends Fragment {
         loadJornadaState();
     }
 
+    private void safeRunOnUiThread(Runnable r) {
+        Activity act = getActivity();
+        if (act != null && isAdded()) {
+            act.runOnUiThread(() -> {
+                if (isAdded()) {
+                    r.run();
+                }
+            });
+        }
+    }
+
     private void loadJornadaState() {
-        Executors.newSingleThreadExecutor().execute(() -> {
+        container.getExecutor().execute(() -> {
             try {
                 Optional<Jornada> openOpt = container.getSalesService().getOpenJornada();
                 Optional<Jornada> lastClosedOpt = container.getSalesService().getLastClosedJornada();
@@ -97,16 +109,14 @@ public class HomeFragment extends Fragment {
                     Jornada open = openOpt.get();
                     activeJornadaId = open.getId();
                     JornadaSummary summary = container.getReportService().summary(open.getId());
-                    requireActivity().runOnUiThread(() -> updateUIOpen(open, summary));
+                    safeRunOnUiThread(() -> updateUIOpen(open, summary));
                 } else {
                     activeJornadaId = null;
                     JornadaSummary summary = lastClosedOpt.isPresent() ?
                             container.getReportService().summary(lastClosedOpt.get().getId()) : null;
-                    requireActivity().runOnUiThread(() -> updateUIClosed(lastClosedOpt.orElse(null), summary));
+                    safeRunOnUiThread(() -> updateUIClosed(lastClosedOpt.orElse(null), summary));
                 }
-            } catch (Exception e) {
-                // Ignore
-            }
+            } catch (Exception ignored) {}
         });
     }
 
@@ -163,60 +173,84 @@ public class HomeFragment extends Fragment {
     }
 
     private void showQuickExpenseDialog() {
-        LinearLayout layout = new LinearLayout(getContext());
+        Context ctx = getContext();
+        if (ctx == null) return;
+
+        LinearLayout layout = new LinearLayout(ctx);
         layout.setOrientation(LinearLayout.VERTICAL);
         layout.setPadding(40, 20, 40, 20);
 
-        EditText inputConcept = new EditText(getContext());
+        EditText inputConcept = new EditText(ctx);
         inputConcept.setHint("Concepto (e.g. Hielo, Bolsas, Limpieza)");
         layout.addView(inputConcept);
 
-        EditText inputAmount = new EditText(getContext());
+        EditText inputAmount = new EditText(ctx);
         inputAmount.setHint("Monto en COP (e.g. 5000)");
         inputAmount.setInputType(android.text.InputType.TYPE_CLASS_NUMBER);
         layout.addView(inputAmount);
 
-        new AlertDialog.Builder(getContext())
-                .setTitle("Registrar Gasto de Turno")
-                .setMessage("Este gasto se restará inmediatamente de las ganancias de la sesión.")
+        boolean hasOpenJornada = (activeJornadaId != null);
+        String title = hasOpenJornada ? "Registrar Gasto de Turno #" + activeJornadaId : "Registrar Gasto Libre (Sin Turno Abierto)";
+        String message = hasOpenJornada ?
+                "Este gasto se restará inmediatamente de las ganancias de este turno." :
+                "No hay una jornada abierta actualmente. Este gasto se registrará como gasto general (no asociado a un turno).";
+
+        new AlertDialog.Builder(ctx)
+                .setTitle(title)
+                .setMessage(message)
                 .setView(layout)
                 .setPositiveButton("Registrar", (d, w) -> {
                     String concept = inputConcept.getText().toString().trim();
                     String amtStr = inputAmount.getText().toString().trim();
-                    if (!concept.isEmpty() && !amtStr.isEmpty()) {
-                        long amount;
+                    if (concept.isEmpty()) {
+                        Toast.makeText(getContext(), "Por favor ingresa un concepto", Toast.LENGTH_SHORT).show();
+                        return;
+                    }
+                    if (amtStr.isEmpty()) {
+                        Toast.makeText(getContext(), "Por favor ingresa un monto", Toast.LENGTH_SHORT).show();
+                        return;
+                    }
+                    long amount;
+                    try {
+                        amount = Long.parseLong(amtStr);
+                    } catch (NumberFormatException e) {
+                        Toast.makeText(getContext(), "Por favor ingresa un monto numérico válido", Toast.LENGTH_SHORT).show();
+                        return;
+                    }
+                    if (amount <= 0) {
+                        Toast.makeText(getContext(), "El monto del gasto debe ser mayor a 0", Toast.LENGTH_SHORT).show();
+                        return;
+                    }
+
+                    container.getExecutor().execute(() -> {
                         try {
-                            amount = Long.parseLong(amtStr);
-                        } catch (NumberFormatException e) {
-                            Toast.makeText(getContext(), "Por favor ingresa un monto válido", Toast.LENGTH_SHORT).show();
-                            return;
-                        }
-                        Executors.newSingleThreadExecutor().execute(() -> {
                             Optional<Jornada> openOpt = container.getSalesService().getOpenJornada();
-                            Long jId = openOpt.map(Jornada::getId).orElse(activeJornadaId);
+                            Long jId = openOpt.map(Jornada::getId).orElse(null);
                             container.getExpenseService().add(concept, amount, Instant.now(), jId);
-                            requireActivity().runOnUiThread(() -> {
+                            safeRunOnUiThread(() -> {
                                 Toast.makeText(getContext(), "Gasto registrado: " + concept + " (-" + CurrencyFormatter.formatCOP(amount) + ")", Toast.LENGTH_SHORT).show();
                                 loadJornadaState();
                             });
-                        });
-                    }
+                        } catch (Exception e) {
+                            safeRunOnUiThread(() -> Toast.makeText(getContext(), "Error: " + e.getMessage(), Toast.LENGTH_LONG).show());
+                        }
+                    });
                 })
                 .setNegativeButton("Cancelar", null)
                 .show();
     }
 
     private void handleOpenJornada() {
-        Executors.newSingleThreadExecutor().execute(() -> {
+        container.getExecutor().execute(() -> {
             try {
                 Jornada j = container.getSalesService().openJornada(Instant.now());
                 activeJornadaId = j.getId();
-                requireActivity().runOnUiThread(() -> {
+                safeRunOnUiThread(() -> {
                     Toast.makeText(getContext(), "Jornada abierta. ¡Ya puedes registrar ventas!", Toast.LENGTH_SHORT).show();
                     loadJornadaState();
                 });
-            } catch (DomainException e) {
-                requireActivity().runOnUiThread(() -> Toast.makeText(getContext(), e.getMessage(), Toast.LENGTH_LONG).show());
+            } catch (Exception e) {
+                safeRunOnUiThread(() -> Toast.makeText(getContext(), e.getMessage(), Toast.LENGTH_LONG).show());
             }
         });
     }
@@ -240,71 +274,76 @@ public class HomeFragment extends Fragment {
     }
 
     private void showPhysicalCountDialog() {
-        Executors.newSingleThreadExecutor().execute(() -> {
-            List<ProductStock> stocks = container.getInventoryService().listStock();
-            requireActivity().runOnUiThread(() -> {
-                ScrollView scroll = new ScrollView(getContext());
-                LinearLayout layout = new LinearLayout(getContext());
-                layout.setOrientation(LinearLayout.VERTICAL);
-                layout.setPadding(32, 16, 32, 16);
-                scroll.addView(layout);
+        container.getExecutor().execute(() -> {
+            try {
+                List<ProductStock> stocks = container.getInventoryService().listStock();
+                safeRunOnUiThread(() -> {
+                    Context ctx = getContext();
+                    if (ctx == null) return;
 
-                Map<Long, EditText> inputs = new HashMap<>();
+                    ScrollView scroll = new ScrollView(ctx);
+                    LinearLayout layout = new LinearLayout(ctx);
+                    layout.setOrientation(LinearLayout.VERTICAL);
+                    layout.setPadding(32, 16, 32, 16);
+                    scroll.addView(layout);
 
-                for (ProductStock s : stocks) {
-                    if (!s.getProduct().isTracksStock()) continue;
+                    Map<Long, EditText> inputs = new HashMap<>();
 
-                    TextView label = new TextView(getContext());
-                    label.setText(s.getProduct().getName() + " (Esperado en sistema: " + s.getCurrentStock() + ")");
-                    label.setTextColor(0xFFFFFFFF);
-                    label.setTextSize(14f);
-                    label.setPadding(0, 12, 0, 4);
-                    layout.addView(label);
+                    for (ProductStock s : stocks) {
+                        if (!s.getProduct().isTracksStock()) continue;
 
-                    EditText input = new EditText(getContext());
-                    input.setHint("Cantidad física contada");
-                    input.setText(String.valueOf(s.getCurrentStock()));
-                    input.setInputType(android.text.InputType.TYPE_CLASS_NUMBER);
-                    layout.addView(input);
+                        TextView label = new TextView(ctx);
+                        label.setText(s.getProduct().getName() + " (Esperado en sistema: " + s.getCurrentStock() + ")");
+                        label.setTextColor(0xFFFFFFFF);
+                        label.setTextSize(14f);
+                        label.setPadding(0, 12, 0, 4);
+                        layout.addView(label);
 
-                    inputs.put(s.getProduct().getId(), input);
-                }
+                        EditText input = new EditText(ctx);
+                        input.setHint("Cantidad física contada");
+                        input.setText(String.valueOf(s.getCurrentStock()));
+                        input.setInputType(android.text.InputType.TYPE_CLASS_NUMBER);
+                        layout.addView(input);
 
-                new AlertDialog.Builder(getContext())
-                        .setTitle("Conteo Físico al Cierre")
-                        .setView(scroll)
-                        .setPositiveButton("Confirmar y Cerrar", (d, w) -> {
-                            Map<Long, Integer> countedMap = new HashMap<>();
-                            for (Map.Entry<Long, EditText> entry : inputs.entrySet()) {
-                                String val = entry.getValue().getText().toString().trim();
-                                if (!val.isEmpty()) {
-                                    try {
-                                        int countVal = Integer.parseInt(val);
-                                        if (countVal < 0) {
-                                            Toast.makeText(getContext(), "El conteo físico no puede ser negativo", Toast.LENGTH_SHORT).show();
+                        inputs.put(s.getProduct().getId(), input);
+                    }
+
+                    new AlertDialog.Builder(ctx)
+                            .setTitle("Conteo Físico al Cierre")
+                            .setView(scroll)
+                            .setPositiveButton("Confirmar y Cerrar", (d, w) -> {
+                                Map<Long, Integer> countedMap = new HashMap<>();
+                                for (Map.Entry<Long, EditText> entry : inputs.entrySet()) {
+                                    String val = entry.getValue().getText().toString().trim();
+                                    if (!val.isEmpty()) {
+                                        try {
+                                            int countVal = Integer.parseInt(val);
+                                            if (countVal < 0) {
+                                                Toast.makeText(getContext(), "El conteo físico no puede ser negativo", Toast.LENGTH_SHORT).show();
+                                                return;
+                                            }
+                                            countedMap.put(entry.getKey(), countVal);
+                                        } catch (NumberFormatException e) {
+                                            Toast.makeText(getContext(), "Por favor ingresa un número válido en todos los campos", Toast.LENGTH_SHORT).show();
                                             return;
                                         }
-                                        countedMap.put(entry.getKey(), countVal);
-                                    } catch (NumberFormatException e) {
-                                        Toast.makeText(getContext(), "Por favor ingresa un número válido en todos los campos", Toast.LENGTH_SHORT).show();
-                                        return;
                                     }
                                 }
-                            }
-                            executeClose(countedMap);
-                        })
-                        .setNegativeButton("Cancelar", null)
-                        .show();
-            });
+                                executeClose(countedMap);
+                            })
+                            .setNegativeButton("Cancelar", null)
+                            .show();
+                });
+            } catch (Exception ignored) {}
         });
     }
 
     private void executeClose(Map<Long, Integer> countedMap) {
-        Executors.newSingleThreadExecutor().execute(() -> {
+        container.getExecutor().execute(() -> {
             try {
                 JornadaSummary summary = container.getSalesService().closeJornada(activeJornadaId, Instant.now(), countedMap);
                 activeJornadaId = null;
-                requireActivity().runOnUiThread(() -> {
+                safeRunOnUiThread(() -> {
                     String msg = "Jornada cerrada exitosamente.\n" +
                             "• Ventas: " + CurrencyFormatter.formatCOP(summary.getTotalSales()) + "\n" +
                             "• Ganancia Bruta: " + CurrencyFormatter.formatCOP(summary.getGrossProfit());
@@ -318,23 +357,23 @@ public class HomeFragment extends Fragment {
                             .show();
                     loadJornadaState();
                 });
-            } catch (DomainException e) {
-                requireActivity().runOnUiThread(() -> Toast.makeText(getContext(), e.getMessage(), Toast.LENGTH_LONG).show());
+            } catch (Exception e) {
+                safeRunOnUiThread(() -> Toast.makeText(getContext(), e.getMessage(), Toast.LENGTH_LONG).show());
             }
         });
     }
 
     private void handleReopenJornada() {
-        Executors.newSingleThreadExecutor().execute(() -> {
+        container.getExecutor().execute(() -> {
             try {
                 Jornada j = container.getSalesService().reopenLastJornada();
                 activeJornadaId = j.getId();
-                requireActivity().runOnUiThread(() -> {
+                safeRunOnUiThread(() -> {
                     Toast.makeText(getContext(), "Última jornada reabierta", Toast.LENGTH_SHORT).show();
                     loadJornadaState();
                 });
-            } catch (DomainException e) {
-                requireActivity().runOnUiThread(() -> Toast.makeText(getContext(), e.getMessage(), Toast.LENGTH_LONG).show());
+            } catch (Exception e) {
+                safeRunOnUiThread(() -> Toast.makeText(getContext(), e.getMessage(), Toast.LENGTH_LONG).show());
             }
         });
     }

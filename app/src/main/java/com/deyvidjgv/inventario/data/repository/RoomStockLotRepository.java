@@ -66,6 +66,16 @@ public class RoomStockLotRepository implements StockLotRepository {
     }
 
     @Override
+    public List<StockLot> findByPeriod(java.time.Instant from, java.time.Instant to) {
+        List<StockLotEntity> entities = stockLotDao.findByPeriod(from, to);
+        List<StockLot> list = new ArrayList<>();
+        for (StockLotEntity entity : entities) {
+            list.add(entity.toDomain());
+        }
+        return list;
+    }
+
+    @Override
     public List<StockLot> findAll() {
         List<StockLotEntity> entities = stockLotDao.findAll();
         List<StockLot> list = new ArrayList<>();

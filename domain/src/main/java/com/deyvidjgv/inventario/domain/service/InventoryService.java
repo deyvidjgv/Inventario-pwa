@@ -11,8 +11,10 @@ public interface InventoryService {
     Product createProduct(String name, long categoryId, long salePrice, boolean tracksStock);
     void updateProduct(Product product);
     void archiveProduct(long productId);
+    void unarchiveProduct(long productId);
     StockLot receiveStock(long productId, int quantity, long unitCost, Instant at, String note);
     List<ProductStock> listStock();
+    List<ProductStock> listStock(boolean includeArchived);
     com.deyvidjgv.inventario.domain.model.Category createCategory(String name);
     List<com.deyvidjgv.inventario.domain.model.Category> listCategories();
     java.util.Optional<Product> getProduct(long productId);

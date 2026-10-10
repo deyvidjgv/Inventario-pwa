@@ -21,6 +21,7 @@ import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 
 import static org.junit.jupiter.api.Assertions.*;
 
@@ -438,5 +439,107 @@ class BusinessRulesTest {
         assertEquals(1, report.getExpenses().size());
         assertEquals("Hielo y bolsas", report.getExpenses().get(0).getConcept());
         assertEquals(4000L, report.getExpenses().get(0).getAmount());
+    }
+
+    @Test
+    @DisplayName("BUG-017: No se puede recibir mercancía en un producto de tipo servicio (tracksStock = false)")
+    void testReceiveStockOnServiceProductThrowsException_BUG017() {
+        Product poolTable = inventoryService.createProduct("Mesa de Billar (Hora)", juegosCategory.getId(), 8000L, false);
+        assertFalse(poolTable.isTracksStock());
+
+        DomainException ex = assertThrows(DomainException.class, () ->
+                inventoryService.receiveStock(poolTable.getId(), 5, 2000L, Instant.now(), "Compra errónea")
+        );
+        assertEquals(ErrorCode.PRODUCT_INACTIVE, ex.getErrorCode());
+    }
+
+    @Test
+    @DisplayName("BUG-011 & FALT-01: listStock oculta archivados por defecto y unarchiveProduct los restaura")
+    void testListStockArchivedAndUnarchive_BUG011() {
+        Product p1 = inventoryService.createProduct("Activo 1", cervezasCategory.getId(), 5000L, true);
+        Product p2 = inventoryService.createProduct("Archivado 2", cervezasCategory.getId(), 6000L, true);
+
+        // Inicialmente ambos activos
+        assertEquals(2, inventoryService.listStock().size());
+
+        // Archivar p2
+        inventoryService.archiveProduct(p2.getId());
+
+        // listStock() por defecto debe excluirlo
+        List<ProductStock> activeStocks = inventoryService.listStock();
+        assertEquals(1, activeStocks.size());
+        assertEquals(p1.getId(), activeStocks.get(0).getProduct().getId());
+
+        // listStock(true) incluye archivados
+        List<ProductStock> allStocks = inventoryService.listStock(true);
+        assertEquals(2, allStocks.size());
+
+        // Desarchivar p2 (FALT-01)
+        inventoryService.unarchiveProduct(p2.getId());
+        assertEquals(2, inventoryService.listStock().size());
+    }
+
+    @Test
+    @DisplayName("BUG-014: Entradas de mercancía en DailyReport excluyen lotes generados por ajuste sobrante")
+    void testDailyReportExcludesPhysicalCountSurplusAdjustment_BUG014() {
+        LocalDate today = LocalDate.now();
+        Product poker = inventoryService.createProduct("Póker 330ml", cervezasCategory.getId(), 5000L, true);
+        inventoryService.receiveStock(poker.getId(), 10, 3000L, Instant.now(), "Compra Real Proveedor");
+
+        // Abrir jornada y registrar ajuste de conteo físico con sobrante (+2 unidades) al cerrar
+        Jornada j = salesService.openJornada(Instant.now());
+        Map<Long, Integer> physicalCounts = new HashMap<>();
+        physicalCounts.put(poker.getId(), 12); // Esperado 10, contado 12 -> Sobrante 2
+        salesService.closeJornada(j.getId(), Instant.now(), physicalCounts);
+
+        com.deyvidjgv.inventario.domain.dto.DailyReport report = reportService.dailyReport(today);
+
+        // Debe registrar solo la compra de proveedor, ignorando el lote de sobrante
+        assertEquals(1, report.getStockEntries().size());
+        assertEquals("Compra Real Proveedor", report.getStockEntries().get(0).getNote());
+        assertEquals(10, report.getStockEntries().get(0).getQuantity());
+    }
+
+    @Test
+    @DisplayName("BUG-013: SaleRepository.findAllocationsBySaleIds agrupa asignaciones por múltiples IDs")
+    void testSaleRepositoryBatchAllocations_BUG013() {
+        Product poker = inventoryService.createProduct("Póker 330ml", cervezasCategory.getId(), 5000L, true);
+        inventoryService.receiveStock(poker.getId(), 20, 3000L, Instant.now(), "Compra inicial");
+
+        salesService.openJornada(Instant.now());
+        Sale sale1 = salesService.sell(poker.getId(), 3);
+        Sale sale2 = salesService.sell(poker.getId(), 4);
+
+        List<SaleLotAllocation> batch = saleRepository.findAllocationsBySaleIds(List.of(sale1.getId(), sale2.getId()));
+        int totalAllocated = batch.stream().mapToInt(SaleLotAllocation::getQuantity).sum();
+        assertEquals(7, totalAllocated);
+    }
+
+    @Test
+    @DisplayName("BUG-021: Backup export e import maneja campos Instant con valor nulo sin excepciones")
+    void testBackupExportImportInstantNullSafe_BUG021() {
+        BackupService backupService = new BackupServiceImpl(
+                categoryRepository, productRepository, stockLotRepository,
+                jornadaRepository, saleRepository, stockAdjustmentRepository,
+                expenseRepository, auditLogRepository, transactionManager
+        );
+
+        // Crear una jornada abierta (closedAt es null) y un gasto sin jornada (jornadaId es null)
+        Instant now = Instant.now();
+        salesService.openJornada(now);
+        expenseService.add("Gasto General Sin Jornada", 15000L, now, null);
+
+        // Exportar a JSON
+        String json = backupService.exportJson();
+        assertNotNull(json);
+        assertTrue(json.contains("Gasto General Sin Jornada"));
+
+        // Restaurar backup desde el JSON
+        backupService.importJson(json);
+
+        // Verificar que la jornada sigue presente y sigue abierta
+        Optional<Jornada> openJornada = salesService.getOpenJornada();
+        assertTrue(openJornada.isPresent());
+        assertNull(openJornada.get().getClosedAt());
     }
 }
