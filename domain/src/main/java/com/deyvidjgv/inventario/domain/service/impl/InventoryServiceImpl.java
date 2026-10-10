@@ -90,4 +90,15 @@ public class InventoryServiceImpl implements InventoryService {
         }
         return result;
     }
+
+    @Override
+    public Category createCategory(String name) {
+        Category category = new Category(name);
+        return categoryRepository.save(category);
+    }
+
+    @Override
+    public List<Category> listCategories() {
+        return categoryRepository.findAll();
+    }
 }

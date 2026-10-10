@@ -39,6 +39,16 @@ public class SalesServiceImpl implements SalesService {
     }
 
     @Override
+    public Optional<Jornada> getOpenJornada() {
+        return jornadaRepository.findOpen();
+    }
+
+    @Override
+    public Optional<Jornada> getLastClosedJornada() {
+        return jornadaRepository.findLastClosed();
+    }
+
+    @Override
     public Jornada openJornada(Instant at) {
         return transactionManager.executeInTransaction(() -> {
             Optional<Jornada> existingOpen = jornadaRepository.findOpen();

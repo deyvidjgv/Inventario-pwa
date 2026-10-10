@@ -13,4 +13,6 @@ public interface SalesService {
     Jornada reopenLastJornada();
     Sale sell(long productId, int quantity);
     void voidSale(long saleId);
+    java.util.Optional<Jornada> getOpenJornada();
+    java.util.Optional<Jornada> getLastClosedJornada();
 }

@@ -13,4 +13,6 @@ public interface InventoryService {
     void archiveProduct(long productId);
     StockLot receiveStock(long productId, int quantity, long unitCost, Instant at, String note);
     List<ProductStock> listStock();
+    com.deyvidjgv.inventario.domain.model.Category createCategory(String name);
+    List<com.deyvidjgv.inventario.domain.model.Category> listCategories();
 }

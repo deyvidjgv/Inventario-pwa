@@ -58,6 +58,20 @@ public class AppContainer {
                 auditRepo,
                 transactionManager
         );
+
+        // Pre-sembrar categorías por defecto en segundo plano si la BD es nueva
+        new Thread(() -> {
+            try {
+                if (categoryRepo.findAll().isEmpty()) {
+                    categoryRepo.save(new com.deyvidjgv.inventario.domain.model.Category("Cervezas"));
+                    categoryRepo.save(new com.deyvidjgv.inventario.domain.model.Category("Snacks"));
+                    categoryRepo.save(new com.deyvidjgv.inventario.domain.model.Category("Cigarrillos"));
+                    categoryRepo.save(new com.deyvidjgv.inventario.domain.model.Category("Licores"));
+                    categoryRepo.save(new com.deyvidjgv.inventario.domain.model.Category("Juegos / Pool"));
+                    categoryRepo.save(new com.deyvidjgv.inventario.domain.model.Category("General"));
+                }
+            } catch (Exception ignored) {}
+        }).start();
     }
 
     public InventoryService getInventoryService() {
