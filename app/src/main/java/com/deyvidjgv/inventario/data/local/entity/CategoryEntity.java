@@ -1,6 +1,7 @@
 package com.deyvidjgv.inventario.data.local.entity;
 
 import androidx.room.Entity;
+import androidx.room.Ignore;
 import androidx.room.PrimaryKey;
 import com.deyvidjgv.inventario.domain.model.Category;
 
@@ -12,6 +13,7 @@ public class CategoryEntity {
 
     public CategoryEntity() {}
 
+    @Ignore
     public CategoryEntity(Long id, String name) {
         this.id = id;
         this.name = name;

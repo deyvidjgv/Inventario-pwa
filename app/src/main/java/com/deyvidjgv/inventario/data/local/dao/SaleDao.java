@@ -41,7 +41,7 @@ public abstract class SaleDao {
     @Query("SELECT * FROM sales WHERE jornadaId = :jornadaId ORDER BY createdAt ASC")
     public abstract List<SaleEntity> findByJornadaId(long jornadaId);
 
-    @Query("SELECT * FROM sales WHERE createdAt >= :from AND createdAt <= :to ORDER BY createdAt ASC")
+    @Query("SELECT * FROM sales WHERE createdAt >= :from AND createdAt < :to ORDER BY createdAt ASC")
     public abstract List<SaleEntity> findByPeriod(Instant from, Instant to);
 
     @Query("SELECT * FROM sales WHERE productId = :productId ORDER BY createdAt ASC")

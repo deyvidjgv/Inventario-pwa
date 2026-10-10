@@ -2,6 +2,7 @@ package com.deyvidjgv.inventario.data.local.entity;
 
 import androidx.room.Entity;
 import androidx.room.ForeignKey;
+import androidx.room.Ignore;
 import androidx.room.Index;
 import androidx.room.PrimaryKey;
 import com.deyvidjgv.inventario.domain.model.Expense;
@@ -28,6 +29,7 @@ public class ExpenseEntity {
 
     public ExpenseEntity() {}
 
+    @Ignore
     public ExpenseEntity(Long id, String concept, long amount, Instant createdAt, Long jornadaId) {
         this.id = id;
         this.concept = concept;

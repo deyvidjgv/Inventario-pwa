@@ -126,7 +126,13 @@ public class InventoryFragment extends Fragment {
                                 Toast.makeText(getContext(), "Por favor ingresa nombre y precio", Toast.LENGTH_SHORT).show();
                                 return;
                             }
-                            long price = Long.parseLong(priceStr);
+                            long price;
+                            try {
+                                price = Long.parseLong(priceStr);
+                            } catch (NumberFormatException e) {
+                                Toast.makeText(getContext(), "Por favor ingresa un precio válido", Toast.LENGTH_SHORT).show();
+                                return;
+                            }
                             boolean tracks = checkStock.isChecked();
                             int catIdx = spinnerCategory.getSelectedItemPosition();
                             long catId = finalCategories.get(catIdx).getId();
@@ -178,8 +184,15 @@ public class InventoryFragment extends Fragment {
                     String qtyStr = inputQty.getText().toString().trim();
                     String costStr = inputCost.getText().toString().trim();
                     if (!qtyStr.isEmpty() && !costStr.isEmpty()) {
-                        int qty = Integer.parseInt(qtyStr);
-                        long cost = Long.parseLong(costStr);
+                        int qty;
+                        long cost;
+                        try {
+                            qty = Integer.parseInt(qtyStr);
+                            cost = Long.parseLong(costStr);
+                        } catch (NumberFormatException e) {
+                            Toast.makeText(getContext(), "Cantidad o costo inválido", Toast.LENGTH_SHORT).show();
+                            return;
+                        }
                         Executors.newSingleThreadExecutor().execute(() -> {
                             try {
                                 container.getInventoryService().receiveStock(product.getId(), qty, cost, Instant.now(), "Compra");
@@ -239,8 +252,15 @@ public class InventoryFragment extends Fragment {
                             String costStr = inputCost.getText().toString().trim();
 
                             if (!qtyStr.isEmpty() && !costStr.isEmpty()) {
-                                int qty = Integer.parseInt(qtyStr);
-                                long cost = Long.parseLong(costStr);
+                                int qty;
+                                long cost;
+                                try {
+                                    qty = Integer.parseInt(qtyStr);
+                                    cost = Long.parseLong(costStr);
+                                } catch (NumberFormatException e) {
+                                    Toast.makeText(getContext(), "Cantidad o costo inválido", Toast.LENGTH_SHORT).show();
+                                    return;
+                                }
                                 Executors.newSingleThreadExecutor().execute(() -> {
                                     try {
                                         container.getInventoryService().receiveStock(selectedProduct.getId(), qty, cost, Instant.now(), "Compra");

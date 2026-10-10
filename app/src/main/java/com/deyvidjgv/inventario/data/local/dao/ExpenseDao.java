@@ -23,7 +23,7 @@ public interface ExpenseDao {
     @Query("SELECT * FROM expenses WHERE jornadaId = :jornadaId ORDER BY createdAt ASC")
     List<ExpenseEntity> findByJornadaId(long jornadaId);
 
-    @Query("SELECT * FROM expenses WHERE createdAt >= :from AND createdAt <= :to ORDER BY createdAt ASC")
+    @Query("SELECT * FROM expenses WHERE createdAt >= :from AND createdAt < :to ORDER BY createdAt ASC")
     List<ExpenseEntity> findByPeriod(Instant from, Instant to);
 
     @Query("SELECT * FROM expenses ORDER BY createdAt DESC")

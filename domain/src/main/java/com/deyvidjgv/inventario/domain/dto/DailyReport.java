@@ -18,7 +18,7 @@ public class DailyReport {
     private final List<ProductSaleDetail> productsSold;
     private final List<StockEntryDetail> stockEntries;
     private final List<Expense> expenses;
-    private final List<StockAdjustment> adjustments;
+    private final List<StockAdjustmentDetail> adjustments;
 
     public DailyReport(LocalDate date,
                        long totalSales,
@@ -28,7 +28,7 @@ public class DailyReport {
                        List<ProductSaleDetail> productsSold,
                        List<StockEntryDetail> stockEntries,
                        List<Expense> expenses,
-                       List<StockAdjustment> adjustments) {
+                       List<StockAdjustmentDetail> adjustments) {
         this.date = date;
         this.totalSales = totalSales;
         this.totalCost = totalCost;
@@ -96,7 +96,17 @@ public class DailyReport {
         return expenses;
     }
 
-    public List<StockAdjustment> getAdjustments() {
+    public List<StockAdjustmentDetail> getAdjustments() {
         return adjustments;
+    }
+
+    public long getTotalShrinkageLoss() {
+        long loss = 0;
+        for (StockAdjustmentDetail adj : adjustments) {
+            if (adj.getDifference() < 0) {
+                loss += Math.abs(adj.getTotalLossOrGainAtCost());
+            }
+        }
+        return loss;
     }
 }

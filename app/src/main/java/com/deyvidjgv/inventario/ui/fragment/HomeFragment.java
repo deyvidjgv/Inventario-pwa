@@ -184,7 +184,13 @@ public class HomeFragment extends Fragment {
                     String concept = inputConcept.getText().toString().trim();
                     String amtStr = inputAmount.getText().toString().trim();
                     if (!concept.isEmpty() && !amtStr.isEmpty()) {
-                        long amount = Long.parseLong(amtStr);
+                        long amount;
+                        try {
+                            amount = Long.parseLong(amtStr);
+                        } catch (NumberFormatException e) {
+                            Toast.makeText(getContext(), "Por favor ingresa un monto válido", Toast.LENGTH_SHORT).show();
+                            return;
+                        }
                         Executors.newSingleThreadExecutor().execute(() -> {
                             Optional<Jornada> openOpt = container.getSalesService().getOpenJornada();
                             Long jId = openOpt.map(Jornada::getId).orElse(activeJornadaId);
@@ -272,7 +278,17 @@ public class HomeFragment extends Fragment {
                             for (Map.Entry<Long, EditText> entry : inputs.entrySet()) {
                                 String val = entry.getValue().getText().toString().trim();
                                 if (!val.isEmpty()) {
-                                    countedMap.put(entry.getKey(), Integer.parseInt(val));
+                                    try {
+                                        int countVal = Integer.parseInt(val);
+                                        if (countVal < 0) {
+                                            Toast.makeText(getContext(), "El conteo físico no puede ser negativo", Toast.LENGTH_SHORT).show();
+                                            return;
+                                        }
+                                        countedMap.put(entry.getKey(), countVal);
+                                    } catch (NumberFormatException e) {
+                                        Toast.makeText(getContext(), "Por favor ingresa un número válido en todos los campos", Toast.LENGTH_SHORT).show();
+                                        return;
+                                    }
                                 }
                             }
                             executeClose(countedMap);

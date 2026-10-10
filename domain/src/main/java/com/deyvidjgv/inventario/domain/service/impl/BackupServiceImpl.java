@@ -12,7 +12,9 @@ import com.google.gson.stream.JsonWriter;
 
 import java.io.IOException;
 import java.time.Instant;
+import java.util.Collections;
 import java.util.List;
+import java.util.stream.Collectors;
 
 public class BackupServiceImpl implements BackupService {
     private final CategoryRepository categoryRepository;
@@ -125,10 +127,12 @@ public class BackupServiceImpl implements BackupService {
             for (Jornada j : payload.getJornadas()) {
                 jornadaRepository.save(j);
             }
+            List<SaleLotAllocation> allAllocations = payload.getAllocations() != null ? payload.getAllocations() : Collections.emptyList();
             for (Sale s : payload.getSales()) {
-                // Filtrar asignaciones correspondientes a esta venta
-                List<SaleLotAllocation> allocs = payload.getAllocations();
-                saleRepository.save(s, allocs != null ? allocs : List.of());
+                List<SaleLotAllocation> allocs = allAllocations.stream()
+                        .filter(a -> a.getSaleId() == s.getId())
+                        .collect(Collectors.toList());
+                saleRepository.save(s, allocs);
             }
             for (StockAdjustment adj : payload.getAdjustments()) {
                 stockAdjustmentRepository.save(adj);

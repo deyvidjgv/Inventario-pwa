@@ -1,6 +1,7 @@
 package com.deyvidjgv.inventario.data.local.entity;
 
 import androidx.room.Entity;
+import androidx.room.Ignore;
 import androidx.room.Index;
 import androidx.room.PrimaryKey;
 import com.deyvidjgv.inventario.domain.model.AuditLog;
@@ -23,6 +24,7 @@ public class AuditLogEntity {
 
     public AuditLogEntity() {}
 
+    @Ignore
     public AuditLogEntity(Long id, String entity, long entityId, String action, String beforeJson, String afterJson, Instant createdAt) {
         this.id = id;
         this.entity = entity;

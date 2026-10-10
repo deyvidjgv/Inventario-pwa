@@ -2,6 +2,7 @@ package com.deyvidjgv.inventario.data.local.entity;
 
 import androidx.room.Entity;
 import androidx.room.ForeignKey;
+import androidx.room.Ignore;
 import androidx.room.Index;
 import androidx.room.PrimaryKey;
 import com.deyvidjgv.inventario.domain.model.Product;
@@ -27,6 +28,7 @@ public class ProductEntity {
 
     public ProductEntity() {}
 
+    @Ignore
     public ProductEntity(Long id, String name, long categoryId, long salePrice, boolean tracksStock, boolean active) {
         this.id = id;
         this.name = name;

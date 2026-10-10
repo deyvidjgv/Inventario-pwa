@@ -15,9 +15,9 @@ import com.deyvidjgv.inventario.R;
 import com.deyvidjgv.inventario.di.AppContainer;
 import com.deyvidjgv.inventario.domain.dto.DailyReport;
 import com.deyvidjgv.inventario.domain.dto.ProductSaleDetail;
+import com.deyvidjgv.inventario.domain.dto.StockAdjustmentDetail;
 import com.deyvidjgv.inventario.domain.dto.StockEntryDetail;
 import com.deyvidjgv.inventario.domain.model.Expense;
-import com.deyvidjgv.inventario.domain.model.StockAdjustment;
 import com.deyvidjgv.inventario.ui.util.CurrencyFormatter;
 import com.google.android.material.button.MaterialButton;
 import com.google.android.material.card.MaterialCardView;
@@ -321,7 +321,7 @@ public class DailyReportFragment extends Fragment {
             }
 
             // Mermas / Ajustes Físicos
-            for (StockAdjustment adj : report.getAdjustments()) {
+            for (StockAdjustmentDetail adj : report.getAdjustments()) {
                 if (adj.getDifference() != 0) {
                     MaterialCardView adjCard = new MaterialCardView(getContext());
                     adjCard.setCardBackgroundColor(0xFF242424);
@@ -336,9 +336,11 @@ public class DailyReportFragment extends Fragment {
                     adjLayout.setPadding(14, 12, 14, 12);
 
                     TextView tvTitle = new TextView(getContext());
+                    String impactStr = adj.getUnitCost() > 0 ?
+                            " (" + CurrencyFormatter.formatCOP(Math.abs(adj.getTotalLossOrGainAtCost())) + " al costo)" : "";
                     String diffStr = adj.getDifference() < 0 ?
-                            "⚠️ Faltante en conteo: " + adj.getDifference() + " uds" :
-                            "ℹ️ Sobrante en conteo: +" + adj.getDifference() + " uds";
+                            "⚠️ " + adj.getProductName() + ": Faltante de " + Math.abs(adj.getDifference()) + " uds" + impactStr :
+                            "ℹ️ " + adj.getProductName() + ": Sobrante de +" + adj.getDifference() + " uds" + impactStr;
                     tvTitle.setText(diffStr);
                     tvTitle.setTextColor(adj.getDifference() < 0 ? 0xFFFF5252 : 0xFFFFD54F);
                     tvTitle.setTextSize(14f);
@@ -346,7 +348,7 @@ public class DailyReportFragment extends Fragment {
                     adjLayout.addView(tvTitle);
 
                     TextView tvSub = new TextView(getContext());
-                    tvSub.setText("Esperado en sistema: " + adj.getExpected() + " | Conteo físico real: " + adj.getCounted());
+                    tvSub.setText("Esperado en sistema: " + adj.getExpected() + " | Conteo físico real: " + adj.getCounted() + " • Turno #" + adj.getJornadaId());
                     tvSub.setTextColor(0xFF9E9E9E);
                     tvSub.setTextSize(12f);
                     adjLayout.addView(tvSub);

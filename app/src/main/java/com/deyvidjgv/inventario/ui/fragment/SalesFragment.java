@@ -217,9 +217,15 @@ public class SalesFragment extends Fragment {
                 .setPositiveButton("Vender", (dialog, which) -> {
                     String str = inputQty.getText().toString().trim();
                     if (!str.isEmpty()) {
-                        int qty = Integer.parseInt(str);
-                        if (qty > 0) {
-                            executeSale(product, qty);
+                        try {
+                            int qty = Integer.parseInt(str);
+                            if (qty > 0) {
+                                executeSale(product, qty);
+                            } else {
+                                Toast.makeText(getContext(), "La cantidad debe ser mayor a 0", Toast.LENGTH_SHORT).show();
+                            }
+                        } catch (NumberFormatException e) {
+                            Toast.makeText(getContext(), "Por favor ingresa un número válido", Toast.LENGTH_SHORT).show();
                         }
                     }
                 })

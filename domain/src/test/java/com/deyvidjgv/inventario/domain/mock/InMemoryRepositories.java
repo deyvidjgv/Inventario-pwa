@@ -225,7 +225,7 @@ public class InMemoryRepositories {
         @Override
         public List<Sale> findByPeriod(Instant from, Instant to) {
             return salesStorage.values().stream()
-                    .filter(s -> !s.getCreatedAt().isBefore(from) && !s.getCreatedAt().isAfter(to))
+                    .filter(s -> !s.getCreatedAt().isBefore(from) && s.getCreatedAt().isBefore(to))
                     .collect(Collectors.toList());
         }
 
@@ -325,7 +325,7 @@ public class InMemoryRepositories {
         @Override
         public List<Expense> findByPeriod(Instant from, Instant to) {
             return storage.values().stream()
-                    .filter(e -> !e.getCreatedAt().isBefore(from) && !e.getCreatedAt().isAfter(to))
+                    .filter(e -> !e.getCreatedAt().isBefore(from) && e.getCreatedAt().isBefore(to))
                     .collect(Collectors.toList());
         }
 

@@ -83,7 +83,13 @@ public class ExpensesFragment extends Fragment {
                     String concept = inputConcept.getText().toString().trim();
                     String amtStr = inputAmount.getText().toString().trim();
                     if (!concept.isEmpty() && !amtStr.isEmpty()) {
-                        long amount = Long.parseLong(amtStr);
+                        long amount;
+                        try {
+                            amount = Long.parseLong(amtStr);
+                        } catch (NumberFormatException e) {
+                            Toast.makeText(getContext(), "Por favor ingresa un monto válido", Toast.LENGTH_SHORT).show();
+                            return;
+                        }
                         Executors.newSingleThreadExecutor().execute(() -> {
                             java.util.Optional<com.deyvidjgv.inventario.domain.model.Jornada> openOpt = container.getSalesService().getOpenJornada();
                             Long jId = openOpt.map(com.deyvidjgv.inventario.domain.model.Jornada::getId).orElse(null);

@@ -2,6 +2,7 @@ package com.deyvidjgv.inventario.data.local.entity;
 
 import androidx.room.Entity;
 import androidx.room.ForeignKey;
+import androidx.room.Ignore;
 import androidx.room.Index;
 import androidx.room.PrimaryKey;
 import com.deyvidjgv.inventario.domain.model.StockLot;
@@ -30,6 +31,7 @@ public class StockLotEntity {
 
     public StockLotEntity() {}
 
+    @Ignore
     public StockLotEntity(Long id, long productId, Instant receivedAt, int quantityIn, int quantityRemaining, long unitCost, String note) {
         this.id = id;
         this.productId = productId;

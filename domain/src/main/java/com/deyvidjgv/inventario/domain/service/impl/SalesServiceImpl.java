@@ -90,6 +90,11 @@ public class SalesServiceImpl implements SalesService {
 
     @Override
     public Sale sell(long productId, int quantity) {
+        return sell(productId, quantity, null);
+    }
+
+    @Override
+    public Sale sell(long productId, int quantity, Instant at) {
         return transactionManager.executeInTransaction(() -> {
             Jornada openJornada = jornadaRepository.findOpen()
                     .orElseThrow(() -> new DomainException(ErrorCode.NO_OPEN_JORNADA, "No hay una jornada abierta. Debe abrir jornada para registrar ventas."));
@@ -104,8 +109,8 @@ public class SalesServiceImpl implements SalesService {
                 throw new DomainException(ErrorCode.INVALID_QUANTITY, "La cantidad a vender debe ser mayor a 0");
             }
 
-            Instant now = Instant.now();
-            Sale newSale = new Sale(openJornada.getId(), productId, quantity, product.getSalePrice(), now);
+            Instant saleTime = at != null ? at : Instant.now();
+            Sale newSale = new Sale(openJornada.getId(), productId, quantity, product.getSalePrice(), saleTime);
             List<SaleLotAllocation> allocations = new ArrayList<>();
 
             if (product.isTracksStock()) {
@@ -195,6 +200,9 @@ public class SalesServiceImpl implements SalesService {
                 for (Map.Entry<Long, Integer> entry : countedByProduct.entrySet()) {
                     long productId = entry.getKey();
                     int counted = entry.getValue();
+                    if (counted < 0) {
+                        throw new DomainException(ErrorCode.INVALID_QUANTITY, "El conteo físico no puede ser negativo: " + counted);
+                    }
 
                     Product product = productRepository.findById(productId).orElse(null);
                     if (product == null || !product.isTracksStock()) {

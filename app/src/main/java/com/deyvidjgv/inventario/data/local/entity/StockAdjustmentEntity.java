@@ -2,6 +2,7 @@ package com.deyvidjgv.inventario.data.local.entity;
 
 import androidx.room.Entity;
 import androidx.room.ForeignKey;
+import androidx.room.Ignore;
 import androidx.room.Index;
 import androidx.room.PrimaryKey;
 import com.deyvidjgv.inventario.domain.model.StockAdjustment;
@@ -38,6 +39,7 @@ public class StockAdjustmentEntity {
 
     public StockAdjustmentEntity() {}
 
+    @Ignore
     public StockAdjustmentEntity(Long id, long productId, long jornadaId, int expected, int counted, int difference, Instant createdAt) {
         this.id = id;
         this.productId = productId;

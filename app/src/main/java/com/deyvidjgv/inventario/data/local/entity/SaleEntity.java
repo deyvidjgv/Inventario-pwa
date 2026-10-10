@@ -2,6 +2,7 @@ package com.deyvidjgv.inventario.data.local.entity;
 
 import androidx.room.Entity;
 import androidx.room.ForeignKey;
+import androidx.room.Ignore;
 import androidx.room.Index;
 import androidx.room.PrimaryKey;
 import com.deyvidjgv.inventario.domain.model.Sale;
@@ -38,6 +39,7 @@ public class SaleEntity {
 
     public SaleEntity() {}
 
+    @Ignore
     public SaleEntity(Long id, long jornadaId, long productId, int quantity, long unitPrice, Instant createdAt, boolean voided) {
         this.id = id;
         this.jornadaId = jornadaId;

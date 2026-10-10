@@ -12,6 +12,7 @@ public interface SalesService {
     JornadaSummary closeJornada(long jornadaId, Instant at, Map<Long, Integer> countedByProduct);
     Jornada reopenLastJornada();
     Sale sell(long productId, int quantity);
+    Sale sell(long productId, int quantity, Instant at);
     void voidSale(long saleId);
     java.util.Optional<Jornada> getOpenJornada();
     java.util.Optional<Jornada> getLastClosedJornada();

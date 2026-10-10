@@ -302,6 +302,27 @@ public class ReportServiceImpl implements ReportService {
                 .filter(a -> !a.getCreatedAt().isBefore(start) && a.getCreatedAt().isBefore(end))
                 .collect(Collectors.toList());
 
+        List<com.deyvidjgv.inventario.domain.dto.StockAdjustmentDetail> adjustmentDetails = new ArrayList<>();
+        for (StockAdjustment adj : adjustments) {
+            String pName = productNames.getOrDefault(adj.getProductId(), "Producto #" + adj.getProductId());
+            Optional<StockLot> newestLot = stockLotRepository.findNewestByProductId(adj.getProductId());
+            long unitCost = newestLot.map(StockLot::getUnitCost).orElse(0L);
+            long totalImpact = (long) adj.getDifference() * unitCost;
+
+            adjustmentDetails.add(new com.deyvidjgv.inventario.domain.dto.StockAdjustmentDetail(
+                    adj.getId(),
+                    adj.getProductId(),
+                    pName,
+                    adj.getJornadaId(),
+                    adj.getExpected(),
+                    adj.getCounted(),
+                    adj.getDifference(),
+                    unitCost,
+                    totalImpact,
+                    adj.getCreatedAt()
+            ));
+        }
+
         return new com.deyvidjgv.inventario.domain.dto.DailyReport(
                 date,
                 totalSales,
@@ -311,7 +332,7 @@ public class ReportServiceImpl implements ReportService {
                 productsSold,
                 stockEntries,
                 expenses,
-                adjustments
+                adjustmentDetails
         );
     }
 }

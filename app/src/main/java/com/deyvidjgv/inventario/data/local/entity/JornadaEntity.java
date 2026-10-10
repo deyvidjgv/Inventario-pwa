@@ -1,6 +1,7 @@
 package com.deyvidjgv.inventario.data.local.entity;
 
 import androidx.room.Entity;
+import androidx.room.Ignore;
 import androidx.room.PrimaryKey;
 import com.deyvidjgv.inventario.domain.model.Jornada;
 
@@ -15,6 +16,7 @@ public class JornadaEntity {
 
     public JornadaEntity() {}
 
+    @Ignore
     public JornadaEntity(Long id, Instant openedAt, Instant closedAt) {
         this.id = id;
         this.openedAt = openedAt;

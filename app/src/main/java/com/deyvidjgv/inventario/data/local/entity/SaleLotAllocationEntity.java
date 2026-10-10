@@ -2,6 +2,7 @@ package com.deyvidjgv.inventario.data.local.entity;
 
 import androidx.room.Entity;
 import androidx.room.ForeignKey;
+import androidx.room.Ignore;
 import androidx.room.Index;
 import com.deyvidjgv.inventario.domain.model.SaleLotAllocation;
 
@@ -32,6 +33,7 @@ public class SaleLotAllocationEntity {
 
     public SaleLotAllocationEntity() {}
 
+    @Ignore
     public SaleLotAllocationEntity(long saleId, long lotId, int quantity, long unitCost) {
         this.saleId = saleId;
         this.lotId = lotId;
