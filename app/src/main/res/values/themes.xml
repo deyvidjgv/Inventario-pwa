@@ -1,6 +1,6 @@
 <resources>
     <style name="Theme.InventarioPool" parent="Theme.MaterialComponents.DayNight.NoActionBar">
-        <item name="colorPrimary">@color/primary</color>
+        <item name="colorPrimary">@color/primary</item>
         <item name="colorSecondary">@color/accent</item>
         <item name="android:colorBackground">@color/background</item>
         <item name="colorSurface">@color/surface</item>
