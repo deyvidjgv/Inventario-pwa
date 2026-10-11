@@ -467,4 +467,137 @@ public class MultiDaySimulationTest {
         assertEquals(2, allocsSale2.size(), "Venta 2 consumió de 2 lotes (14 del lote 1 y 6 del lote 2)");
         assertEquals(20, allocsSale2.stream().mapToInt(SaleLotAllocation::getQuantity).sum());
     }
+
+    @Test
+    @DisplayName("Semana Completa (7 Días): Simulación extrema de bar/billar, FIFO, mermas, aumentos de precio y respaldo total")
+    void testWeekLongFullBarPoolSimulation() {
+        LocalDate lunes = LocalDate.of(2026, 10, 5);
+        LocalDate martes = LocalDate.of(2026, 10, 6);
+        LocalDate miercoles = LocalDate.of(2026, 10, 7);
+        LocalDate jueves = LocalDate.of(2026, 10, 8);
+        LocalDate viernes = LocalDate.of(2026, 10, 9);
+        LocalDate sabado = LocalDate.of(2026, 10, 10);
+        LocalDate domingo = LocalDate.of(2026, 10, 11);
+
+        // --- LUNES (Día 1): Entradas iniciales, servicios de pool sin stock y ventas ---
+        StockLot lotPoker1 = inventoryService.receiveStock(poker.getId(), 30, 3000L, instantAt(lunes, 10, 0), "Lote Poker 1");
+        StockLot lotAguila1 = inventoryService.receiveStock(aguila.getId(), 20, 3500L, instantAt(lunes, 10, 30), "Lote Águila 1");
+
+        Jornada jLunes = salesService.openJornada(instantAt(lunes, 14, 0));
+        salesService.sell(juegoPool.getId(), 5, instantAt(lunes, 15, 0)); // 5 * 3000 = 15.000 (costo 0)
+        salesService.sell(poker.getId(), 12, instantAt(lunes, 16, 0)); // 12 * 5500 = 66.000 (costo 12 * 3000 = 36.000)
+        salesService.sell(aguila.getId(), 8, instantAt(lunes, 17, 0)); // 8 * 6000 = 48.000 (costo 8 * 3500 = 28.000)
+        expenseService.add("Hielo y vasos", 5000L, instantAt(lunes, 18, 0), jLunes.getId());
+
+        // Cierre exacto
+        Map<Long, Integer> countLunes = new HashMap<>();
+        countLunes.put(poker.getId(), 18); // 30 - 12 = 18
+        countLunes.put(aguila.getId(), 12); // 20 - 8 = 12
+        JornadaSummary sumLunes = salesService.closeJornada(jLunes.getId(), instantAt(lunes, 23, 0), countLunes);
+        assertEquals(129000L, sumLunes.getTotalSales());
+        assertEquals(64000L, sumLunes.getTotalCost());
+        assertEquals(65000L, sumLunes.getGrossProfit());
+        assertEquals(5000L, sumLunes.getTotalExpenses());
+        assertEquals(60000L, sumLunes.getNetInformativeProfit());
+        assertEquals(3, sumLunes.getSalesCount());
+
+        // --- MARTES (Día 2): Venta, Anulación (rollback FIFO) y Conteo con Faltante (Merma) ---
+        Jornada jMartes = salesService.openJornada(instantAt(martes, 15, 0));
+        salesService.sell(poker.getId(), 10, instantAt(martes, 16, 0)); // Quedan 8 en lote 1
+        Sale saleAguilaErr = salesService.sell(aguila.getId(), 2, instantAt(martes, 17, 0)); // Quedaban 10
+        // Anulación inmediata
+        salesService.voidSale(saleAguilaErr.getId());
+        // Verificar que el stock de águila vuelve a ser 12
+        assertEquals(12, stockLotRepository.findById(lotAguila1.getId()).get().getQuantityRemaining());
+
+        // Al cierre hay merma: el cantinero rompió 1 Poker (faltante -1)
+        Map<Long, Integer> countMartes = new HashMap<>();
+        countMartes.put(poker.getId(), 7); // Esperado 8, contado 7 -> Merma -1
+        countMartes.put(aguila.getId(), 12);
+        JornadaSummary sumMartes = salesService.closeJornada(jMartes.getId(), instantAt(martes, 23, 0), countMartes);
+        assertEquals(1, sumMartes.getAdjustments().size());
+        assertEquals(-1, sumMartes.getAdjustments().get(0).getDifference());
+        assertEquals(7, stockLotRepository.findById(lotPoker1.getId()).get().getQuantityRemaining());
+
+        // --- MIÉRCOLES (Día 3): Entrada con nuevo costo y Venta Trans-Lote FIFO ---
+        StockLot lotPoker2 = inventoryService.receiveStock(poker.getId(), 24, 3400L, instantAt(miercoles, 11, 0), "Lote Poker 2 (Mayor costo)");
+        Jornada jMiercoles = salesService.openJornada(instantAt(miercoles, 14, 0));
+        // Se venden 15 Poker: debe consumir 7 del Lote 1 (@3000) y 8 del Lote 2 (@3400)
+        Sale saleTransLot = salesService.sell(poker.getId(), 15, instantAt(miercoles, 18, 0));
+        salesService.closeJornada(jMiercoles.getId(), instantAt(miercoles, 22, 0), Collections.emptyMap());
+
+        List<SaleLotAllocation> allocsTrans = saleRepository.findAllocationsBySaleId(saleTransLot.getId());
+        assertEquals(2, allocsTrans.size());
+        assertEquals(7, allocsTrans.get(0).getQuantity());
+        assertEquals(3000L, allocsTrans.get(0).getUnitCost());
+        assertEquals(8, allocsTrans.get(1).getQuantity());
+        assertEquals(3400L, allocsTrans.get(1).getUnitCost());
+        // Lote 1 agotado
+        assertEquals(0, stockLotRepository.findById(lotPoker1.getId()).get().getQuantityRemaining());
+        // Lote 2 quedan 16
+        assertEquals(16, stockLotRepository.findById(lotPoker2.getId()).get().getQuantityRemaining());
+
+        // --- JUEVES (Día 4): Actualización de Precio de Venta (FALT-01) ---
+        Product aguilaActualizada = new Product(aguila.getId(), aguila.getName(), aguila.getCategoryId(), 6500L, true, true);
+        inventoryService.updateProduct(aguilaActualizada);
+
+        Jornada jJueves = salesService.openJornada(instantAt(jueves, 15, 0));
+        Sale saleAguilaNuevoPrecio = salesService.sell(aguila.getId(), 4, instantAt(jueves, 17, 0));
+        assertEquals(6500L, saleAguilaNuevoPrecio.getUnitPrice());
+        assertEquals(26000L, saleAguilaNuevoPrecio.getTotal());
+        salesService.closeJornada(jJueves.getId(), instantAt(jueves, 22, 0), Collections.emptyMap());
+
+        // --- VIERNES (Día 5): Doble turno y turno que cruza medianoche con sobrante ---
+        // Turno tarde
+        Jornada jViernesTarde = salesService.openJornada(instantAt(viernes, 14, 0));
+        salesService.sell(juegoPool.getId(), 3, instantAt(viernes, 16, 0)); // 24.000
+        salesService.closeJornada(jViernesTarde.getId(), instantAt(viernes, 19, 0), Collections.emptyMap());
+
+        // Turno noche que cruza a sábado (20:00 a 03:00 de sábado)
+        Jornada jViernesNoche = salesService.openJornada(instantAt(viernes, 20, 0));
+        salesService.sell(poker.getId(), 10, instantAt(viernes, 23, 0));
+        expenseService.add("Turno extra personal", 20000L, instantAt(sabado, 1, 0), jViernesNoche.getId());
+        // Cierre con sobrante (+2 Poker)
+        Map<Long, Integer> countNoche = new HashMap<>();
+        countNoche.put(poker.getId(), 8); // Esperado 6, contado 8 -> Sobrante +2
+        salesService.closeJornada(jViernesNoche.getId(), instantAt(sabado, 3, 0), countNoche);
+
+        // --- SÁBADO (Día 6): Reabrir turno cerrado y continuar operación ---
+        Jornada jReabierta = salesService.reopenLastJornada();
+        assertTrue(jReabierta.isOpen());
+        salesService.sell(aguila.getId(), 2, instantAt(sabado, 3, 30));
+        salesService.closeJornada(jReabierta.getId(), instantAt(sabado, 4, 0), Collections.emptyMap());
+
+        // --- DOMINGO (Día 7): Respaldo JSON completo, limpieza y verificación al 100% ---
+        ProductMarginReport marginAguilaPre = reportService.margins(aguila.getId());
+        DailyReport repLunesPre = reportService.dailyReport(lunes);
+        DailyReport repJuevesPre = reportService.dailyReport(jueves);
+        DailyReport repViernesPre = reportService.dailyReport(viernes);
+
+        String backupJson = backupService.exportJson();
+        assertNotNull(backupJson);
+
+        // Restaurar sobre base de datos limpia
+        backupService.importJson(backupJson);
+
+        // Verificar integridad matemática absoluta
+        ProductMarginReport marginAguilaPost = reportService.margins(aguila.getId());
+        assertEquals(marginAguilaPre.getTotalSales(), marginAguilaPost.getTotalSales());
+        assertEquals(marginAguilaPre.getTotalCost(), marginAguilaPost.getTotalCost());
+        assertEquals(marginAguilaPre.getRealProfit(), marginAguilaPost.getRealProfit());
+        assertEquals(marginAguilaPre.getUnitsSold(), marginAguilaPost.getUnitsSold());
+
+        DailyReport repLunesPost = reportService.dailyReport(lunes);
+        assertEquals(repLunesPre.getTotalSales(), repLunesPost.getTotalSales());
+        assertEquals(repLunesPre.getTotalCost(), repLunesPost.getTotalCost());
+        assertEquals(repLunesPre.getNetProfit(), repLunesPost.getNetProfit());
+
+        DailyReport repJuevesPost = reportService.dailyReport(jueves);
+        assertEquals(repJuevesPre.getTotalSales(), repJuevesPost.getTotalSales());
+        assertEquals(repJuevesPre.getTotalCost(), repJuevesPost.getTotalCost());
+
+        DailyReport repViernesPost = reportService.dailyReport(viernes);
+        assertEquals(repViernesPre.getTotalSales(), repViernesPost.getTotalSales());
+        assertEquals(repViernesPre.getTotalCost(), repViernesPost.getTotalCost());
+    }
 }

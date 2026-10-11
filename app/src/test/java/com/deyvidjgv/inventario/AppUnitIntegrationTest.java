@@ -215,4 +215,102 @@ public class AppUnitIntegrationTest {
         assertEquals(Instant.parse("2026-10-11T05:00:00Z"), endOfDay);
         assertTrue(endOfDay.isAfter(startOfDay));
     }
+
+    @Test
+    public void testRoomProductRepositoryInsertVsUpdateOnRestoreAndEdit() {
+        java.util.concurrent.atomic.AtomicBoolean updated = new java.util.concurrent.atomic.AtomicBoolean(false);
+        java.util.concurrent.atomic.AtomicBoolean inserted = new java.util.concurrent.atomic.AtomicBoolean(false);
+        java.util.concurrent.atomic.AtomicReference<ProductEntity> existingInDb = new java.util.concurrent.atomic.AtomicReference<>(null);
+
+        com.deyvidjgv.inventario.data.local.dao.ProductDao mockDao = new com.deyvidjgv.inventario.data.local.dao.ProductDao() {
+            @Override
+            public long insert(ProductEntity entity) {
+                inserted.set(true);
+                return entity.id != null ? entity.id : 100L;
+            }
+
+            @Override
+            public void update(ProductEntity entity) {
+                updated.set(true);
+            }
+
+            @Override
+            public ProductEntity findById(long id) {
+                return existingInDb.get();
+            }
+
+            @Override
+            public java.util.List<ProductEntity> findAll() { return java.util.Collections.emptyList(); }
+
+            @Override
+            public java.util.List<ProductEntity> findActive() { return java.util.Collections.emptyList(); }
+
+            @Override
+            public void deleteAll() {}
+        };
+
+        com.deyvidjgv.inventario.data.repository.RoomProductRepository repo = new com.deyvidjgv.inventario.data.repository.RoomProductRepository(mockDao);
+
+        // Caso 1: Restaurar respaldo donde la tabla está vacía (findById == null), pero el producto tiene ID
+        Product backupProduct = new Product(55L, "Poker", 1L, 5000L, true, true);
+        repo.save(backupProduct);
+        assertTrue("Debe llamar insert() al restaurar respaldo con ID no existente en BD", inserted.get());
+        assertFalse("NO debe llamar update() cuando el registro no existe en BD", updated.get());
+
+        // Caso 2: Editar producto existente (findById != null)
+        inserted.set(false);
+        updated.set(false);
+        existingInDb.set(ProductEntity.fromDomain(backupProduct));
+        Product editedProduct = new Product(55L, "Poker 330ml", 1L, 5500L, true, true);
+        repo.save(editedProduct);
+        assertTrue("Debe llamar update() al editar un producto existente para respetar FKs", updated.get());
+        assertFalse("NO debe llamar insert() al editar producto existente", inserted.get());
+    }
+
+    @Test
+    public void testRoomCategoryRepositoryInsertVsUpdateOnRestoreAndEdit() {
+        java.util.concurrent.atomic.AtomicBoolean updated = new java.util.concurrent.atomic.AtomicBoolean(false);
+        java.util.concurrent.atomic.AtomicBoolean inserted = new java.util.concurrent.atomic.AtomicBoolean(false);
+        java.util.concurrent.atomic.AtomicReference<CategoryEntity> existingInDb = new java.util.concurrent.atomic.AtomicReference<>(null);
+
+        com.deyvidjgv.inventario.data.local.dao.CategoryDao mockDao = new com.deyvidjgv.inventario.data.local.dao.CategoryDao() {
+            @Override
+            public long insert(CategoryEntity entity) {
+                inserted.set(true);
+                return entity.id != null ? entity.id : 10L;
+            }
+
+            @Override
+            public void update(CategoryEntity entity) {
+                updated.set(true);
+            }
+
+            @Override
+            public CategoryEntity findById(long id) {
+                return existingInDb.get();
+            }
+
+            @Override
+            public java.util.List<CategoryEntity> findAll() { return java.util.Collections.emptyList(); }
+
+            @Override
+            public void deleteAll() {}
+        };
+
+        com.deyvidjgv.inventario.data.repository.RoomCategoryRepository repo = new com.deyvidjgv.inventario.data.repository.RoomCategoryRepository(mockDao);
+
+        // Caso 1: Restaurar respaldo
+        Category catBackup = new Category(5L, "Licores");
+        repo.save(catBackup);
+        assertTrue("Debe insertar categoría en tabla vacía al restaurar", inserted.get());
+        assertFalse("No debe intentar update si categoría no existe", updated.get());
+
+        // Caso 2: Editar categoría existente
+        inserted.set(false);
+        updated.set(false);
+        existingInDb.set(CategoryEntity.fromDomain(catBackup));
+        repo.save(new Category(5L, "Licores Importados"));
+        assertTrue("Debe actualizar categoría existente", updated.get());
+        assertFalse("No debe insertar categoría duplicada", inserted.get());
+    }
 }

@@ -256,7 +256,7 @@ public class HomeFragment extends Fragment {
     }
 
     private void handleCloseJornada() {
-        if (activeJornadaId == null) return;
+        if (activeJornadaId == null || getContext() == null) return;
 
         CharSequence[] options = {"Cerrar directamente (Sin conteo físico)", "Hacer conteo físico de stock (Recomendado)"};
 
@@ -344,6 +344,7 @@ public class HomeFragment extends Fragment {
                 JornadaSummary summary = container.getSalesService().closeJornada(activeJornadaId, Instant.now(), countedMap);
                 activeJornadaId = null;
                 safeRunOnUiThread(() -> {
+                    if (getContext() == null) return;
                     String msg = "Jornada cerrada exitosamente.\n" +
                             "• Ventas: " + CurrencyFormatter.formatCOP(summary.getTotalSales()) + "\n" +
                             "• Ganancia Bruta: " + CurrencyFormatter.formatCOP(summary.getGrossProfit());

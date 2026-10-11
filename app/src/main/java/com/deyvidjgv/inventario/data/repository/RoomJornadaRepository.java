@@ -19,7 +19,7 @@ public class RoomJornadaRepository implements JornadaRepository {
     @Override
     public Jornada save(Jornada jornada) {
         JornadaEntity entity = JornadaEntity.fromDomain(jornada);
-        if (jornada.getId() != null) {
+        if (jornada.getId() != null && jornadaDao.findById(jornada.getId()) != null) {
             jornadaDao.update(entity);
             return jornada;
         } else {

@@ -251,7 +251,7 @@ public class SalesFragment extends Fragment {
                     Toast.makeText(getContext(), "✓ +" + quantity + " " + product.getName() + " (" + CurrencyFormatter.formatCOP(sale.getTotal()) + ")", Toast.LENGTH_SHORT).show();
                     loadData();
                 });
-            } catch (DomainException e) {
+            } catch (Exception e) {
                 safeRunOnUiThread(() -> Toast.makeText(getContext(), e.getMessage(), Toast.LENGTH_LONG).show());
             }
         });
@@ -259,123 +259,131 @@ public class SalesFragment extends Fragment {
 
     private void voidLastSale() {
         container.getExecutor().execute(() -> {
-            Optional<Jornada> openOpt = container.getSalesService().getOpenJornada();
-            if (!openOpt.isPresent()) {
-                safeRunOnUiThread(() ->
-                        Toast.makeText(getContext(), "No hay una jornada abierta actualmente", Toast.LENGTH_SHORT).show());
-                return;
+            try {
+                Optional<Jornada> openOpt = container.getSalesService().getOpenJornada();
+                if (!openOpt.isPresent()) {
+                    safeRunOnUiThread(() ->
+                            Toast.makeText(getContext(), "No hay una jornada abierta actualmente", Toast.LENGTH_SHORT).show());
+                    return;
+                }
+
+                long jornadaId = openOpt.get().getId();
+                Optional<Sale> lastSaleOpt = container.getSalesService().getLastNonVoidedSale(jornadaId);
+
+                if (!lastSaleOpt.isPresent()) {
+                    safeRunOnUiThread(() ->
+                            Toast.makeText(getContext(), "No hay ventas activas para anular en esta sesión", Toast.LENGTH_SHORT).show());
+                    return;
+                }
+
+                Sale lastSale = lastSaleOpt.get();
+                Product product = container.getInventoryService().getProduct(lastSale.getProductId()).orElse(null);
+                String prodName = product != null ? product.getName() : "Producto #" + lastSale.getProductId();
+
+                java.time.format.DateTimeFormatter timeFmt = java.time.format.DateTimeFormatter.ofPattern("hh:mm a")
+                        .withZone(java.time.ZoneId.of("America/Bogota"));
+                String timeStr = timeFmt.format(lastSale.getCreatedAt());
+
+                safeRunOnUiThread(() -> {
+                    if (getContext() == null) return;
+                    new AlertDialog.Builder(getContext())
+                            .setTitle("Anular Última Venta")
+                            .setMessage("¿Deseas anular la última venta de esta sesión?\n\n" +
+                                    "• Producto: " + prodName + "\n" +
+                                    "• Cantidad: " + lastSale.getQuantity() + " unidades\n" +
+                                    "• Total: " + CurrencyFormatter.formatCOP(lastSale.getTotal()) + "\n" +
+                                    "• Hora: " + timeStr + "\n\n" +
+                                    "Las unidades regresarán inmediatamente al inventario en sus lotes originales.")
+                            .setPositiveButton("Sí, Anular Venta", (d, w) -> {
+                                container.getExecutor().execute(() -> {
+                                    try {
+                                        container.getSalesService().voidSale(lastSale.getId());
+                                        safeRunOnUiThread(() -> {
+                                            Toast.makeText(getContext(), "Venta anulada. +" + lastSale.getQuantity() + " " + prodName + " restauradas al stock.", Toast.LENGTH_LONG).show();
+                                            loadData();
+                                        });
+                                    } catch (Exception e) {
+                                        safeRunOnUiThread(() -> Toast.makeText(getContext(), e.getMessage(), Toast.LENGTH_LONG).show());
+                                    }
+                                });
+                            })
+                            .setNeutralButton("Ver todas de la sesión", (d, w) -> showSessionSalesDialog(jornadaId))
+                            .setNegativeButton("Cancelar", null)
+                            .show();
+                });
+            } catch (Exception e) {
+                safeRunOnUiThread(() -> Toast.makeText(getContext(), "Error: " + e.getMessage(), Toast.LENGTH_LONG).show());
             }
-
-            long jornadaId = openOpt.get().getId();
-            Optional<Sale> lastSaleOpt = container.getSalesService().getLastNonVoidedSale(jornadaId);
-
-            if (!lastSaleOpt.isPresent()) {
-                safeRunOnUiThread(() ->
-                        Toast.makeText(getContext(), "No hay ventas activas para anular en esta sesión", Toast.LENGTH_SHORT).show());
-                return;
-            }
-
-            Sale lastSale = lastSaleOpt.get();
-            Product product = container.getInventoryService().getProduct(lastSale.getProductId()).orElse(null);
-            String prodName = product != null ? product.getName() : "Producto #" + lastSale.getProductId();
-
-            java.time.format.DateTimeFormatter timeFmt = java.time.format.DateTimeFormatter.ofPattern("hh:mm a")
-                    .withZone(java.time.ZoneId.of("America/Bogota"));
-            String timeStr = timeFmt.format(lastSale.getCreatedAt());
-
-            safeRunOnUiThread(() -> {
-                if (getContext() == null) return;
-                new AlertDialog.Builder(getContext())
-                        .setTitle("Anular Última Venta")
-                        .setMessage("¿Deseas anular la última venta de esta sesión?\n\n" +
-                                "• Producto: " + prodName + "\n" +
-                                "• Cantidad: " + lastSale.getQuantity() + " unidades\n" +
-                                "• Total: " + CurrencyFormatter.formatCOP(lastSale.getTotal()) + "\n" +
-                                "• Hora: " + timeStr + "\n\n" +
-                                "Las unidades regresarán inmediatamente al inventario en sus lotes originales.")
-                        .setPositiveButton("Sí, Anular Venta", (d, w) -> {
-                            container.getExecutor().execute(() -> {
-                                try {
-                                    container.getSalesService().voidSale(lastSale.getId());
-                                    safeRunOnUiThread(() -> {
-                                        Toast.makeText(getContext(), "Venta anulada. +" + lastSale.getQuantity() + " " + prodName + " restauradas al stock.", Toast.LENGTH_LONG).show();
-                                        loadData();
-                                    });
-                                } catch (DomainException e) {
-                                    safeRunOnUiThread(() -> Toast.makeText(getContext(), e.getMessage(), Toast.LENGTH_LONG).show());
-                                }
-                            });
-                        })
-                        .setNeutralButton("Ver todas de la sesión", (d, w) -> showSessionSalesDialog(jornadaId))
-                        .setNegativeButton("Cancelar", null)
-                        .show();
-            });
         });
     }
 
     private void showSessionSalesDialog(long jornadaId) {
         container.getExecutor().execute(() -> {
-            List<Sale> allSales = container.getSalesService().getSalesForJornada(jornadaId);
-            List<Sale> activeSales = new ArrayList<>();
-            for (Sale s : allSales) {
-                if (!s.isVoided()) {
-                    activeSales.add(s);
+            try {
+                List<Sale> allSales = container.getSalesService().getSalesForJornada(jornadaId);
+                List<Sale> activeSales = new ArrayList<>();
+                for (Sale s : allSales) {
+                    if (!s.isVoided()) {
+                        activeSales.add(s);
+                    }
                 }
+
+                activeSales.sort((a, b) -> b.getCreatedAt().compareTo(a.getCreatedAt()));
+
+                if (activeSales.isEmpty()) {
+                    safeRunOnUiThread(() ->
+                            Toast.makeText(getContext(), "No hay ventas activas en esta sesión", Toast.LENGTH_SHORT).show());
+                    return;
+                }
+
+                List<ProductStock> stocks = container.getInventoryService().listStock();
+                java.util.Map<Long, String> namesById = new java.util.HashMap<>();
+                for (ProductStock ps : stocks) {
+                    namesById.put(ps.getProduct().getId(), ps.getProduct().getName());
+                }
+
+                java.time.format.DateTimeFormatter timeFmt = java.time.format.DateTimeFormatter.ofPattern("hh:mm a")
+                        .withZone(java.time.ZoneId.of("America/Bogota"));
+
+                CharSequence[] items = new CharSequence[activeSales.size()];
+                for (int i = 0; i < activeSales.size(); i++) {
+                    Sale s = activeSales.get(i);
+                    String pName = namesById.getOrDefault(s.getProductId(), "Producto #" + s.getProductId());
+                    items[i] = pName + " x" + s.getQuantity() + " — " + CurrencyFormatter.formatCOP(s.getTotal()) + " (" + timeFmt.format(s.getCreatedAt()) + ")";
+                }
+
+                safeRunOnUiThread(() -> {
+                    if (getContext() == null) return;
+                    new AlertDialog.Builder(getContext())
+                            .setTitle("Selecciona la venta a anular")
+                            .setItems(items, (dialog, which) -> {
+                                Sale selected = activeSales.get(which);
+                                String pName = namesById.getOrDefault(selected.getProductId(), "Producto #" + selected.getProductId());
+                                new AlertDialog.Builder(getContext())
+                                         .setTitle("Confirmar Anulación")
+                                        .setMessage("¿Anular la venta de " + selected.getQuantity() + " " + pName + " por " + CurrencyFormatter.formatCOP(selected.getTotal()) + "?")
+                                        .setPositiveButton("Sí, Anular", (d, w) -> {
+                                            container.getExecutor().execute(() -> {
+                                                try {
+                                                    container.getSalesService().voidSale(selected.getId());
+                                                    safeRunOnUiThread(() -> {
+                                                        Toast.makeText(getContext(), "Venta de " + pName + " anulada con éxito.", Toast.LENGTH_SHORT).show();
+                                                        loadData();
+                                                    });
+                                                } catch (Exception e) {
+                                                    safeRunOnUiThread(() -> Toast.makeText(getContext(), e.getMessage(), Toast.LENGTH_LONG).show());
+                                                }
+                                            });
+                                        })
+                                        .setNegativeButton("Cancelar", null)
+                                        .show();
+                            })
+                            .setNegativeButton("Cerrar", null)
+                            .show();
+                });
+            } catch (Exception e) {
+                safeRunOnUiThread(() -> Toast.makeText(getContext(), "Error: " + e.getMessage(), Toast.LENGTH_LONG).show());
             }
-
-            activeSales.sort((a, b) -> b.getCreatedAt().compareTo(a.getCreatedAt()));
-
-            if (activeSales.isEmpty()) {
-                safeRunOnUiThread(() ->
-                        Toast.makeText(getContext(), "No hay ventas activas en esta sesión", Toast.LENGTH_SHORT).show());
-                return;
-            }
-
-            List<ProductStock> stocks = container.getInventoryService().listStock();
-            java.util.Map<Long, String> namesById = new java.util.HashMap<>();
-            for (ProductStock ps : stocks) {
-                namesById.put(ps.getProduct().getId(), ps.getProduct().getName());
-            }
-
-            java.time.format.DateTimeFormatter timeFmt = java.time.format.DateTimeFormatter.ofPattern("hh:mm a")
-                    .withZone(java.time.ZoneId.of("America/Bogota"));
-
-            CharSequence[] items = new CharSequence[activeSales.size()];
-            for (int i = 0; i < activeSales.size(); i++) {
-                Sale s = activeSales.get(i);
-                String pName = namesById.getOrDefault(s.getProductId(), "Producto #" + s.getProductId());
-                items[i] = pName + " x" + s.getQuantity() + " — " + CurrencyFormatter.formatCOP(s.getTotal()) + " (" + timeFmt.format(s.getCreatedAt()) + ")";
-            }
-
-            safeRunOnUiThread(() -> {
-                if (getContext() == null) return;
-                new AlertDialog.Builder(getContext())
-                        .setTitle("Selecciona la venta a anular")
-                        .setItems(items, (dialog, which) -> {
-                            Sale selected = activeSales.get(which);
-                            String pName = namesById.getOrDefault(selected.getProductId(), "Producto #" + selected.getProductId());
-                            new AlertDialog.Builder(getContext())
-                                     .setTitle("Confirmar Anulación")
-                                    .setMessage("¿Anular la venta de " + selected.getQuantity() + " " + pName + " por " + CurrencyFormatter.formatCOP(selected.getTotal()) + "?")
-                                    .setPositiveButton("Sí, Anular", (d, w) -> {
-                                        container.getExecutor().execute(() -> {
-                                            try {
-                                                container.getSalesService().voidSale(selected.getId());
-                                                safeRunOnUiThread(() -> {
-                                                    Toast.makeText(getContext(), "Venta de " + pName + " anulada con éxito.", Toast.LENGTH_SHORT).show();
-                                                    loadData();
-                                                });
-                                            } catch (DomainException e) {
-                                                safeRunOnUiThread(() -> Toast.makeText(getContext(), e.getMessage(), Toast.LENGTH_LONG).show());
-                                            }
-                                        });
-                                    })
-                                    .setNegativeButton("Cancelar", null)
-                                    .show();
-                        })
-                        .setNegativeButton("Cerrar", null)
-                        .show();
-            });
         });
     }
 
@@ -421,10 +429,10 @@ public class SalesFragment extends Fragment {
             btn.setText(p.getName() + "\n" + CurrencyFormatter.formatCOP(p.getSalePrice()) + stockLabel);
 
             if (p.isTracksStock() && item.getCurrentStock() <= 0) {
-                btn.setBackgroundColor(0xFF333333);
+                btn.setBackgroundTintList(android.content.res.ColorStateList.valueOf(0xFF333333));
                 btn.setTextColor(0xFF888888);
             } else {
-                btn.setBackgroundColor(0xFF1E1E1E);
+                btn.setBackgroundTintList(android.content.res.ColorStateList.valueOf(0xFF1E1E1E));
                 btn.setTextColor(0xFFFFFFFF);
             }
 

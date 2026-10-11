@@ -54,6 +54,15 @@ public class InventoryFragment extends Fragment {
         );
         recyclerView.setAdapter(adapter);
 
+        com.google.android.material.checkbox.MaterialCheckBox checkArchived = view.findViewById(R.id.check_show_archived);
+        if (checkArchived != null) {
+            checkArchived.setChecked(showArchived);
+            checkArchived.setOnCheckedChangeListener((buttonView, isChecked) -> {
+                showArchived = isChecked;
+                loadInventory();
+            });
+        }
+
         btnReceiveStock.setOnClickListener(v -> showReceiveStockDialog());
         btnAddProduct.setOnClickListener(v -> showAddProductDialog());
 

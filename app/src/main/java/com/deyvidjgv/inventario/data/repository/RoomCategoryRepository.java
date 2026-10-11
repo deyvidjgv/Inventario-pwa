@@ -19,7 +19,7 @@ public class RoomCategoryRepository implements CategoryRepository {
     @Override
     public Category save(Category category) {
         CategoryEntity entity = CategoryEntity.fromDomain(category);
-        if (category.getId() != null) {
+        if (category.getId() != null && categoryDao.findById(category.getId()) != null) {
             categoryDao.update(entity);
             return category;
         } else {

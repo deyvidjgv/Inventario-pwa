@@ -19,8 +19,13 @@ public class RoomStockLotRepository implements StockLotRepository {
     @Override
     public StockLot save(StockLot lot) {
         StockLotEntity entity = StockLotEntity.fromDomain(lot);
-        long id = stockLotDao.insert(entity);
-        return lot.withId(id);
+        if (lot.getId() != null && stockLotDao.findById(lot.getId()) != null) {
+            stockLotDao.update(entity);
+            return lot;
+        } else {
+            long id = stockLotDao.insert(entity);
+            return lot.withId(id);
+        }
     }
 
     @Override

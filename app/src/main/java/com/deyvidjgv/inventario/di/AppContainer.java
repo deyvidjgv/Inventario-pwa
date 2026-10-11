@@ -64,7 +64,7 @@ public class AppContainer {
         );
 
         // Pre-sembrar categorías por defecto en segundo plano si la BD es nueva
-        new Thread(() -> {
+        executor.execute(() -> {
             try {
                 if (categoryRepo.findAll().isEmpty()) {
                     categoryRepo.save(new com.deyvidjgv.inventario.domain.model.Category("Cervezas"));
@@ -75,7 +75,7 @@ public class AppContainer {
                     categoryRepo.save(new com.deyvidjgv.inventario.domain.model.Category("General"));
                 }
             } catch (Exception ignored) {}
-        }).start();
+        });
     }
 
     public InventoryService getInventoryService() {

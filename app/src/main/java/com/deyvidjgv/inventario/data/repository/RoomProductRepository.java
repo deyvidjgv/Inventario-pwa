@@ -19,7 +19,7 @@ public class RoomProductRepository implements ProductRepository {
     @Override
     public Product save(Product product) {
         ProductEntity entity = ProductEntity.fromDomain(product);
-        if (product.getId() != null) {
+        if (product.getId() != null && productDao.findById(product.getId()) != null) {
             productDao.update(entity);
             return product;
         } else {

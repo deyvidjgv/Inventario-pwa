@@ -112,6 +112,7 @@ public class BackupFragment extends Fragment {
     }
 
     private void handleImport() {
+        if (getContext() == null) return;
         CharSequence[] options = {"Seleccionar archivo .json (Recomendado)", "Pegar texto JSON manualmente"};
         new AlertDialog.Builder(getContext())
                 .setTitle("Restaurar Copia de Seguridad")
@@ -163,6 +164,7 @@ public class BackupFragment extends Fragment {
     }
 
     private void showPasteJsonDialog() {
+        if (getContext() == null) return;
         EditText inputJson = new EditText(getContext());
         inputJson.setHint("Pega el contenido JSON del respaldo aquí");
         inputJson.setLines(6);
