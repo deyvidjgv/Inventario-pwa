@@ -107,46 +107,70 @@ public class BackupServiceImpl implements BackupService {
             throw new DomainException(ErrorCode.BACKUP_CORRUPTED, "Versión de respaldo incompatible o inválida");
         }
 
-        transactionManager.executeInTransaction(() -> {
-            // Limpiar datos existentes en orden inverso a dependencias FK (hijos primero)
-            saleRepository.deleteAll(); // Borra allocations y luego sales
-            stockAdjustmentRepository.deleteAll();
-            expenseRepository.deleteAll();
-            stockLotRepository.deleteAll();
-            productRepository.deleteAll();
-            categoryRepository.deleteAll();
-            jornadaRepository.deleteAll();
-            auditLogRepository.deleteAll();
+        try {
+            transactionManager.executeInTransaction(() -> {
+                // Limpiar datos existentes en orden inverso a dependencias FK (hijos primero)
+                saleRepository.deleteAll(); // Borra allocations y luego sales
+                stockAdjustmentRepository.deleteAll();
+                expenseRepository.deleteAll();
+                stockLotRepository.deleteAll();
+                productRepository.deleteAll();
+                categoryRepository.deleteAll();
+                jornadaRepository.deleteAll();
+                auditLogRepository.deleteAll();
 
-            // Restaurar entidades
-            for (Category c : payload.getCategories()) {
-                categoryRepository.save(c);
-            }
-            for (Product p : payload.getProducts()) {
-                productRepository.save(p);
-            }
-            for (StockLot l : payload.getLots()) {
-                stockLotRepository.save(l);
-            }
-            for (Jornada j : payload.getJornadas()) {
-                jornadaRepository.save(j);
-            }
-            List<SaleLotAllocation> allAllocations = payload.getAllocations() != null ? payload.getAllocations() : Collections.emptyList();
-            for (Sale s : payload.getSales()) {
-                List<SaleLotAllocation> allocs = allAllocations.stream()
-                        .filter(a -> a.getSaleId() == s.getId())
-                        .collect(Collectors.toList());
-                saleRepository.save(s, allocs);
-            }
-            for (StockAdjustment adj : payload.getAdjustments()) {
-                stockAdjustmentRepository.save(adj);
-            }
-            for (Expense exp : payload.getExpenses()) {
-                expenseRepository.save(exp);
-            }
-            for (AuditLog log : payload.getAuditLogs()) {
-                auditLogRepository.save(log);
-            }
-        });
+                // Restaurar entidades con validación contra listas nulas
+                if (payload.getCategories() != null) {
+                    for (Category c : payload.getCategories()) {
+                        if (c != null) categoryRepository.save(c);
+                    }
+                }
+                if (payload.getProducts() != null) {
+                    for (Product p : payload.getProducts()) {
+                        if (p != null) productRepository.save(p);
+                    }
+                }
+                if (payload.getLots() != null) {
+                    for (StockLot l : payload.getLots()) {
+                        if (l != null) stockLotRepository.save(l);
+                    }
+                }
+                if (payload.getJornadas() != null) {
+                    for (Jornada j : payload.getJornadas()) {
+                        if (j != null) jornadaRepository.save(j);
+                    }
+                }
+                List<SaleLotAllocation> allAllocations = payload.getAllocations() != null ? payload.getAllocations() : Collections.emptyList();
+                if (payload.getSales() != null) {
+                    for (Sale s : payload.getSales()) {
+                        if (s != null) {
+                            List<SaleLotAllocation> allocs = allAllocations.stream()
+                                    .filter(a -> a != null && s.getId() != null && a.getSaleId() == s.getId())
+                                    .collect(Collectors.toList());
+                            saleRepository.save(s, allocs);
+                        }
+                    }
+                }
+                if (payload.getAdjustments() != null) {
+                    for (StockAdjustment adj : payload.getAdjustments()) {
+                        if (adj != null) stockAdjustmentRepository.save(adj);
+                    }
+                }
+                if (payload.getExpenses() != null) {
+                    for (Expense exp : payload.getExpenses()) {
+                        if (exp != null) expenseRepository.save(exp);
+                    }
+                }
+                if (payload.getAuditLogs() != null) {
+                    for (AuditLog log : payload.getAuditLogs()) {
+                        if (log != null) auditLogRepository.save(log);
+                    }
+                }
+            });
+        } catch (DomainException de) {
+            throw de;
+        } catch (Exception e) {
+            throw new DomainException(ErrorCode.BACKUP_CORRUPTED, "Error al procesar los datos del archivo de respaldo: " + e.getMessage(), e);
+        }
     }
 }

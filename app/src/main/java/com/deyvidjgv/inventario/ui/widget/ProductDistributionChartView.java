@@ -131,9 +131,9 @@ public class ProductDistributionChartView extends View {
             canvas.drawRoundRect(rect, 4f * density, 4f * density, bgBarPaint);
 
             // Segmento de Costo y Ganancia
-            float profitRatio = r.getTotalSales() > 0 ? (float) r.getRealProfit() / r.getTotalSales() : 0f;
+            float profitRatio = r.getTotalSales() > 0 ? Math.max(0f, Math.min(1.0f, (float) r.getRealProfit() / r.getTotalSales())) : 0f;
             float profitWidth = barTotalWidth * profitRatio;
-            float costWidth = barTotalWidth - profitWidth;
+            float costWidth = Math.max(0f, barTotalWidth - profitWidth);
 
             // Dibuja Costo
             if (costWidth > 0) {

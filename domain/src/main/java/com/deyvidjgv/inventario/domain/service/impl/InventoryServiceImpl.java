@@ -44,6 +44,9 @@ public class InventoryServiceImpl implements InventoryService {
         if (product.getId() == null || !productRepository.findById(product.getId()).isPresent()) {
             throw new DomainException(ErrorCode.PRODUCT_NOT_FOUND, "El producto a actualizar no existe: " + product.getId());
         }
+        if (!categoryRepository.findById(product.getCategoryId()).isPresent()) {
+            throw new DomainException(ErrorCode.CATEGORY_NOT_FOUND, "La categoría especificada no existe: " + product.getCategoryId());
+        }
         productRepository.save(product);
     }
 

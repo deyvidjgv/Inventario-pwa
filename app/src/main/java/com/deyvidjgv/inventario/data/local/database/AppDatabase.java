@@ -47,7 +47,7 @@ public abstract class AppDatabase extends RoomDatabase {
                         AppDatabase.class,
                         "inventario_pool.db"
                     )
-                    .fallbackToDestructiveMigration()
+                    .fallbackToDestructiveMigrationOnDowngrade()
                     .build();
                 }
             }

@@ -9,6 +9,7 @@ import com.deyvidjgv.inventario.domain.service.SalesService;
 
 import java.time.Instant;
 import java.util.*;
+import java.util.stream.Collectors;
 
 public class SalesServiceImpl implements SalesService {
     private final JornadaRepository jornadaRepository;
@@ -153,6 +154,13 @@ public class SalesServiceImpl implements SalesService {
                 throw new DomainException(ErrorCode.SALE_ALREADY_VOIDED, "La venta ya se encuentra anulada");
             }
 
+            Jornada jornada = jornadaRepository.findById(sale.getJornadaId())
+                    .orElseThrow(() -> new DomainException(ErrorCode.JORNADA_NOT_FOUND, "Jornada no encontrada: " + sale.getJornadaId()));
+
+            if (!jornada.isOpen()) {
+                throw new DomainException(ErrorCode.JORNADA_NOT_FOUND, "No se puede anular una venta de una jornada cerrada. Debe reabrir la jornada primero.");
+            }
+
             // Restaurar lotes si tenía asignaciones
             List<SaleLotAllocation> allocations = saleRepository.findAllocationsBySaleId(saleId);
             List<StockLot> lotsToRestore = new ArrayList<>();
@@ -265,7 +273,16 @@ public class SalesServiceImpl implements SalesService {
             }
         }
 
-        List<Expense> expenses = expenseRepository.findByJornadaId(jornadaId);
+        List<Expense> expenses = new ArrayList<>(expenseRepository.findByJornadaId(jornadaId));
+        Instant opened = openedAt;
+        Instant closed = closedAt != null ? closedAt : Instant.now();
+        List<Expense> periodExpenses = expenseRepository.findByPeriod(opened, closed);
+        Set<Long> alreadyIncludedIds = expenses.stream().map(Expense::getId).filter(Objects::nonNull).collect(Collectors.toSet());
+        for (Expense pe : periodExpenses) {
+            if (pe.getJornadaId() == null && !alreadyIncludedIds.contains(pe.getId())) {
+                expenses.add(pe);
+            }
+        }
         long totalExpenses = expenses.stream().mapToLong(Expense::getAmount).sum();
 
         if (adjustments == null) {

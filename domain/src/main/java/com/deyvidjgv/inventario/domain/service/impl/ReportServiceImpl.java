@@ -199,6 +199,9 @@ public class ReportServiceImpl implements ReportService {
 
     @Override
     public PeriodSummary summary(LocalDate from, LocalDate to) {
+        if (from != null && to != null && from.isAfter(to)) {
+            throw new DomainException(ErrorCode.INVALID_QUANTITY, "La fecha inicial no puede ser posterior a la fecha final");
+        }
         Instant start = from.atStartOfDay(BOGOTA_ZONE).toInstant();
         Instant end = to.plusDays(1).atStartOfDay(BOGOTA_ZONE).toInstant();
 

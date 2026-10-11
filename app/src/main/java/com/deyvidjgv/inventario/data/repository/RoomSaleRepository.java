@@ -86,10 +86,14 @@ public class RoomSaleRepository implements SaleRepository {
     @Override
     public List<SaleLotAllocation> findAllocationsBySaleIds(List<Long> saleIds) {
         if (saleIds == null || saleIds.isEmpty()) return java.util.Collections.emptyList();
-        List<SaleLotAllocationEntity> entities = saleDao.findAllocationsBySaleIds(saleIds);
+        final int BATCH_SIZE = 500;
         List<SaleLotAllocation> list = new ArrayList<>();
-        for (SaleLotAllocationEntity entity : entities) {
-            list.add(entity.toDomain());
+        for (int i = 0; i < saleIds.size(); i += BATCH_SIZE) {
+            List<Long> batch = saleIds.subList(i, Math.min(i + BATCH_SIZE, saleIds.size()));
+            List<SaleLotAllocationEntity> entities = saleDao.findAllocationsBySaleIds(batch);
+            for (SaleLotAllocationEntity entity : entities) {
+                list.add(entity.toDomain());
+            }
         }
         return list;
     }

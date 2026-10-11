@@ -542,4 +542,116 @@ class BusinessRulesTest {
         assertTrue(openJornada.isPresent());
         assertNull(openJornada.get().getClosedAt());
     }
+
+    @Test
+    @DisplayName("BUG-029: Cierre de jornada incluye gastos huérfanos del período igual que ReportService")
+    void testCloseJornadaIncludesOrphanPeriodExpenses_BUG029() {
+        Product aguila = inventoryService.createProduct("Águila 330ml", cervezasCategory.getId(), 5000L, true);
+        inventoryService.receiveStock(aguila.getId(), 20, 3000L, Instant.now(), "Compra inicial");
+
+        Instant t0 = Instant.now().minusSeconds(3600);
+        Jornada j = salesService.openJornada(t0);
+        salesService.sell(aguila.getId(), 2);
+
+        // Gasto directo con jornadaId
+        expenseService.add("Hielo turno", 5000L, t0.plusSeconds(600), j.getId());
+        // Gasto huérfano (sin jornadaId) durante el mismo período
+        expenseService.add("Servilletas huérfano", 3000L, t0.plusSeconds(1200), null);
+
+        JornadaSummary closingSummary = salesService.closeJornada(j.getId(), t0.plusSeconds(3000), Collections.emptyMap());
+        JornadaSummary reportSummary = reportService.summary(j.getId());
+
+        assertEquals(8000L, closingSummary.getTotalExpenses(), "El resumen al cerrar debe sumar gastos con y sin jornada del período");
+        assertEquals(8000L, reportSummary.getTotalExpenses(), "El resumen de reportes debe coincidir exactamente con el de cierre");
+        assertEquals(closingSummary.getNetInformativeProfit(), reportSummary.getNetInformativeProfit());
+    }
+
+    @Test
+    @DisplayName("BUG-031: Backup import maneja listas nulas en JSON sin lanzar NullPointerException")
+    void testBackupImportNullListsHandledGracefully_BUG031() {
+        BackupService backupService = new BackupServiceImpl(
+                categoryRepository, productRepository, stockLotRepository,
+                jornadaRepository, saleRepository, stockAdjustmentRepository,
+                expenseRepository, auditLogRepository, transactionManager
+        );
+
+        String jsonMinimal = "{\"version\":1,\"exportedAt\":\"2026-10-11T12:00:00Z\",\"categories\":null,\"products\":null,\"lots\":null,\"jornadas\":null,\"sales\":null,\"allocations\":null,\"adjustments\":null,\"expenses\":null,\"auditLogs\":null}";
+        assertDoesNotThrow(() -> backupService.importJson(jsonMinimal));
+
+        assertTrue(categoryRepository.findAll().isEmpty());
+    }
+
+    @Test
+    @DisplayName("BUG-032: No se permite anular ventas ni agregar/eliminar gastos en jornadas cerradas")
+    void testRejectModificationsOnClosedJornada_BUG032() {
+        Product poker = inventoryService.createProduct("Póker 330ml", cervezasCategory.getId(), 5000L, true);
+        inventoryService.receiveStock(poker.getId(), 10, 3000L, Instant.now(), "Compra");
+
+        Jornada j = salesService.openJornada(Instant.now());
+        Sale s = salesService.sell(poker.getId(), 2);
+        Expense exp = expenseService.add("Gasto turno", 4000L, Instant.now(), j.getId());
+
+        salesService.closeJornada(j.getId(), Instant.now(), Collections.emptyMap());
+
+        // 1. Intentar anular venta de jornada cerrada debe fallar
+        DomainException exVoid = assertThrows(DomainException.class, () -> salesService.voidSale(s.getId()));
+        assertEquals(ErrorCode.JORNADA_NOT_FOUND, exVoid.getErrorCode());
+
+        // 2. Intentar agregar gasto a jornada cerrada debe fallar
+        DomainException exAdd = assertThrows(DomainException.class, () -> expenseService.add("Gasto tardío", 2000L, Instant.now(), j.getId()));
+        assertEquals(ErrorCode.JORNADA_NOT_FOUND, exAdd.getErrorCode());
+
+        // 3. Intentar eliminar gasto de jornada cerrada debe fallar
+        DomainException exDel = assertThrows(DomainException.class, () -> expenseService.delete(exp.getId()));
+        assertEquals(ErrorCode.JORNADA_NOT_FOUND, exDel.getErrorCode());
+    }
+
+    @Test
+    @DisplayName("BUG-033: StockLot.restore rechaza restaurar más cantidad de la que ingresó originalmente")
+    void testStockLotRestoreCannotExceedQuantityIn_BUG033() {
+        StockLot lot = new StockLot(1L, 10L, Instant.now(), 20, 15, 3000L, "Lote 20 uds");
+        // Restaurar 5 debe llevarlo a 20 (ok)
+        StockLot fullLot = lot.restore(5);
+        assertEquals(20, fullLot.getQuantityRemaining());
+
+        // Intentar restaurar 1 más (excede quantityIn=20) debe lanzar DomainException
+        DomainException ex = assertThrows(DomainException.class, () -> fullLot.restore(1));
+        assertEquals(ErrorCode.INVALID_QUANTITY, ex.getErrorCode());
+    }
+
+    @Test
+    @DisplayName("BUG-034: InventoryService.updateProduct rechaza categoría inexistente")
+    void testUpdateProductRejectsNonExistentCategory_BUG034() {
+        Product p = inventoryService.createProduct("Club Colombia", cervezasCategory.getId(), 7000L, true);
+        Product updatedInvalidCat = new Product(p.getId(), "Club Colombia", 9999L, 7000L, true, true);
+
+        DomainException ex = assertThrows(DomainException.class, () -> inventoryService.updateProduct(updatedInvalidCat));
+        assertEquals(ErrorCode.CATEGORY_NOT_FOUND, ex.getErrorCode());
+    }
+
+    @Test
+    @DisplayName("BUG-035: Nombres vacíos en Category, Product y Expense lanzan DomainException(INVALID_NAME)")
+    void testBlankNamesThrowDomainExceptionInvalidName_BUG035() {
+        DomainException exCat = assertThrows(DomainException.class, () -> new Category("   "));
+        assertEquals(ErrorCode.INVALID_NAME, exCat.getErrorCode());
+
+        DomainException exProd = assertThrows(DomainException.class, () -> new Product("", 1L, 5000L, true));
+        assertEquals(ErrorCode.INVALID_NAME, exProd.getErrorCode());
+
+        DomainException exExp = assertThrows(DomainException.class, () -> new Expense("  ", 5000L, Instant.now(), null));
+        assertEquals(ErrorCode.INVALID_NAME, exExp.getErrorCode());
+    }
+
+    @Test
+    @DisplayName("BUG-037: Rangos de fechas invertidos en reportes y gastos lanzan DomainException")
+    void testInvertedDateRangesThrowDomainException_BUG037() {
+        LocalDate start = LocalDate.of(2026, 10, 20);
+        LocalDate end = LocalDate.of(2026, 10, 15);
+
+        DomainException exReport = assertThrows(DomainException.class, () -> reportService.summary(start, end));
+        assertEquals(ErrorCode.INVALID_QUANTITY, exReport.getErrorCode());
+
+        DomainException exExpense = assertThrows(DomainException.class, () -> expenseService.list(start, end));
+        assertEquals(ErrorCode.INVALID_QUANTITY, exExpense.getErrorCode());
+    }
 }

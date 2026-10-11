@@ -313,4 +313,66 @@ public class AppUnitIntegrationTest {
         assertTrue("Debe actualizar categoría existente", updated.get());
         assertFalse("No debe insertar categoría duplicada", inserted.get());
     }
+
+    @Test
+    public void testRoomSaleRepositoryBatchingOver999Ids() {
+        java.util.concurrent.atomic.AtomicInteger batchCount = new java.util.concurrent.atomic.AtomicInteger(0);
+        java.util.concurrent.atomic.AtomicInteger maxBatchSize = new java.util.concurrent.atomic.AtomicInteger(0);
+
+        com.deyvidjgv.inventario.data.local.dao.SaleDao mockDao = new com.deyvidjgv.inventario.data.local.dao.SaleDao() {
+            @Override
+            public long insertSale(SaleEntity sale) { return 1L; }
+            @Override
+            public void insertAllocations(java.util.List<SaleLotAllocationEntity> allocations) {}
+            @Override
+            public void updateSale(SaleEntity sale) {}
+            @Override
+            public SaleEntity findById(long id) { return null; }
+            @Override
+            public java.util.List<SaleEntity> findByJornadaId(long jornadaId) { return java.util.Collections.emptyList(); }
+            @Override
+            public java.util.List<SaleEntity> findByPeriod(Instant from, Instant to) { return java.util.Collections.emptyList(); }
+            @Override
+            public java.util.List<SaleEntity> findByProductId(long productId) { return java.util.Collections.emptyList(); }
+            @Override
+            public java.util.List<SaleLotAllocationEntity> findAllocationsBySaleId(long saleId) { return java.util.Collections.emptyList(); }
+            @Override
+            public java.util.List<SaleLotAllocationEntity> findAllocationsBySaleIds(java.util.List<Long> saleIds) {
+                batchCount.incrementAndGet();
+                if (saleIds.size() > maxBatchSize.get()) {
+                    maxBatchSize.set(saleIds.size());
+                }
+                java.util.List<SaleLotAllocationEntity> list = new java.util.ArrayList<>();
+                for (Long id : saleIds) {
+                    list.add(new SaleLotAllocationEntity(id, 10L, 1, 3000L));
+                }
+                return list;
+            }
+            @Override
+            public java.util.List<SaleLotAllocationEntity> findAllocationsByProductId(long productId) { return java.util.Collections.emptyList(); }
+            @Override
+            public java.util.List<SaleEntity> findAll() { return java.util.Collections.emptyList(); }
+            @Override
+            public java.util.List<SaleLotAllocationEntity> findAllAllocations() { return java.util.Collections.emptyList(); }
+            @Override
+            public void deleteAllSales() {}
+            @Override
+            public void deleteAllAllocations() {}
+        };
+
+        com.deyvidjgv.inventario.data.repository.RoomSaleRepository repo =
+                new com.deyvidjgv.inventario.data.repository.RoomSaleRepository(mockDao);
+
+        // Crear 1,250 IDs simulando un fin de semana de alto tráfico
+        java.util.List<Long> largeSaleIdList = new java.util.ArrayList<>();
+        for (long i = 1; i <= 1250; i++) {
+            largeSaleIdList.add(i);
+        }
+
+        java.util.List<SaleLotAllocation> result = repo.findAllocationsBySaleIds(largeSaleIdList);
+
+        assertEquals(1250, result.size());
+        assertEquals("Debe haberse dividido en 3 lotes (500 + 500 + 250)", 3, batchCount.get());
+        assertTrue("Ningún lote debe superar el límite de 999 parámetros de SQLite", maxBatchSize.get() <= 500);
+    }
 }

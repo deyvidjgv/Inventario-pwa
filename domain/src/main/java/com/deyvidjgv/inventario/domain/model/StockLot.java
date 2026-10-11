@@ -84,6 +84,9 @@ public class StockLot {
         if (quantityToRestore <= 0) {
             throw new DomainException(ErrorCode.INVALID_QUANTITY, "La cantidad a restaurar debe ser mayor a 0");
         }
+        if (quantityRemaining + quantityToRestore > quantityIn) {
+            throw new DomainException(ErrorCode.INVALID_QUANTITY, "No se puede restaurar más stock del que ingresó inicialmente en el lote");
+        }
         return new StockLot(id, productId, receivedAt, quantityIn, quantityRemaining + quantityToRestore, unitCost, note);
     }
 

@@ -15,7 +15,7 @@ public class Product {
 
     public Product(Long id, String name, long categoryId, long salePrice, boolean tracksStock, boolean active) {
         if (name == null || name.trim().isEmpty()) {
-            throw new IllegalArgumentException("El nombre del producto no puede estar vacío");
+            throw new DomainException(ErrorCode.INVALID_NAME, "El nombre del producto no puede estar vacío");
         }
         if (salePrice < 0) {
             throw new DomainException(ErrorCode.INVALID_SALE_PRICE, "El precio de venta no puede ser negativo");

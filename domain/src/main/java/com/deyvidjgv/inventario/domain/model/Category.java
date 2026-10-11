@@ -1,5 +1,8 @@
 package com.deyvidjgv.inventario.domain.model;
 
+import com.deyvidjgv.inventario.domain.exception.DomainException;
+import com.deyvidjgv.inventario.domain.exception.ErrorCode;
+
 import java.util.Objects;
 
 public class Category {
@@ -8,7 +11,7 @@ public class Category {
 
     public Category(Long id, String name) {
         if (name == null || name.trim().isEmpty()) {
-            throw new IllegalArgumentException("El nombre de la categoría no puede estar vacío");
+            throw new DomainException(ErrorCode.INVALID_NAME, "El nombre de la categoría no puede estar vacío");
         }
         this.id = id;
         this.name = name.trim();

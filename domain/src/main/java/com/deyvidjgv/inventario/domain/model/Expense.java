@@ -15,7 +15,7 @@ public class Expense {
 
     public Expense(Long id, String concept, long amount, Instant createdAt, Long jornadaId) {
         if (concept == null || concept.trim().isEmpty()) {
-            throw new IllegalArgumentException("El concepto del gasto no puede estar vacío");
+            throw new DomainException(ErrorCode.INVALID_NAME, "El concepto del gasto no puede estar vacío");
         }
         if (amount <= 0) {
             throw new DomainException(ErrorCode.INVALID_AMOUNT, "El monto del gasto debe ser mayor a 0");
